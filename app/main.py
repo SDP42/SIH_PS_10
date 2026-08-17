@@ -1,0 +1,65 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from app import conceptmap, api
+import os
+
+app = FastAPI(
+    title="Ayush ICD-11 Terminology Microservice",
+    version="0.1.0",
+    description="FHIR-compliant terminology service for mapping NAMASTE Ayurveda codes to ICD-11"
+)
+
+# CORS — allow localhost dev + any production origin
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register API routers FIRST so they take priority over static file catch-all
+app.include_router(conceptmap.router, tags=["ConceptMap"])
+app.include_router(api.router, prefix="/api", tags=["API"])
+
+# Serve React frontend static files if the dist directory exists
+FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+
+if os.path.isdir(FRONTEND_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+
+    @app.get("/")
+    def serve_root():
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        """Catch-all: return index.html for React Router client-side routing."""
+        # Don't intercept API / ConceptMap routes
+        if full_path.startswith("api/") or full_path.startswith("ConceptMap"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404)
+        file_path = os.path.join(FRONTEND_DIST, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+else:
+    # Fallback JSON root when no frontend build is present
+    @app.get("/")
+    def root():
+        return {
+            "message": "AYUSH ICD-11 Terminology Microservice",
+            "version": "0.1.0",
+            "endpoints": {
+                "concept_maps": "/ConceptMap",
+                "specific_mapping": "/ConceptMap/{code}",
+                "docs": "/docs",
+                "stats": "/api/stats",
+                "search": "/api/search",
+                "concepts": "/api/concepts",
+                "mappings": "/api/mappings",
+            }
+        }
