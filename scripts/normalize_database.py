@@ -14,6 +14,13 @@ def normalize_spaces_in_database():
     
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+
+    # Check if concept_map table exists
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='concept_map'")
+    if not cur.fetchone():
+        print("💡 Table 'concept_map' does not exist yet. Skipping normalization.")
+        conn.close()
+        return
     
     # First, show current spacing issues
     print("\n1. Current spacing patterns:")
@@ -31,6 +38,8 @@ def normalize_spaces_in_database():
     
     updated_count = 0
     for record_id, source_code in all_records:
+        if not source_code:
+            continue
         # Normalize: replace multiple spaces with single space, trim
         normalized = re.sub(r'\s+', ' ', source_code.strip())
         

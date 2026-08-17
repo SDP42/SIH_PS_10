@@ -4,8 +4,9 @@ Complete NAMASTE-ICD-11 Integration Setup Script
 This script performs all necessary initialization steps:
 1. Downloads datasets
 2. Creates database and indexes
-3. Normalizes data
-4. Generates comprehensive concept mappings
+3. Generates comprehensive concept mappings
+4. Normalizes data
+5. Verifies setup
 """
 
 import os
@@ -110,16 +111,16 @@ def main():
         fts_columns=["code","parent_id","word","short_defination"]
     )
     
-    # Step 3: Normalize database
-    print_step(3, "NORMALIZING DATABASE")
-    run_step("Normalizing spacing and formatting", normalize_spaces_in_database)
-    
-    # Step 4: Generate concept mappings
-    print_step(4, "GENERATING COMPREHENSIVE CONCEPT MAPPINGS")
+    # Step 3: Generate concept mappings
+    print_step(3, "GENERATING COMPREHENSIVE CONCEPT MAPPINGS")
     run_step("Creating concept mapping table", create_concept_map_table)
     mapping_count = run_step("Generating mappings", create_precise_mappings)
     print(f"✅ Generated {mapping_count:,} concept mappings")
     
+    # Step 4: Normalize database
+    print_step(4, "NORMALIZING DATABASE")
+    run_step("Normalizing spacing and formatting", normalize_spaces_in_database)
+
     # Step 5: Verify setup
     print_step(5, "VERIFYING SETUP")
     
@@ -159,14 +160,9 @@ def main():
     print("\n🎉 SETUP COMPLETE!")
     print("=" * 60)
     print("✅ All datasets downloaded and indexed")
-    print("✅ Database normalized and optimized") 
     print("✅ Comprehensive concept mappings generated")
+    print("✅ Database normalized and optimized") 
     print("✅ FHIR-compliant API ready to start")
-    print("\n📋 NEXT STEPS:")
-    print("1. Run tests: python tests/run_tests.py")
-    print("2. Start API: uvicorn app.main:app --reload")
-    print("3. View API docs: http://localhost:8000/docs")
-    print("4. Export mappings: python scripts/export_mappings.py")
     print(f"\n⏱️  Setup completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 if __name__ == "__main__":
