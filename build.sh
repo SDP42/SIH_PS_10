@@ -2,8 +2,9 @@
 # exit on error
 set -o errexit
 
-echo "=== 1. Installing Python Dependencies ==="
-pip install -r requirements.txt
+echo "=== 1. Upgrading Pip & Installing Dependencies ==="
+python -m pip install --upgrade pip
+pip install --prefer-binary -r requirements.txt
 
 echo "=== 2. Running Data Initialization & Database Builder ==="
 python scripts/init.py
