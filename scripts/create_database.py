@@ -38,7 +38,7 @@ def index_csv_to_sqlite(
 
     print(f"Importing {csv_path} into {db_path}...")
 
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, low_memory=False, dtype=str)
     df.columns = clean_column_names(df.columns)
 
     conn = create_connection(db_path)
@@ -53,6 +53,14 @@ def index_csv_to_sqlite(
     else:
         print(f"Creating table '{table_name}' and importing data...")
         df.to_sql(table_name, conn, if_exists="replace", index=False)
+
+    # Add standard indexes for fast joins
+    if table_name == "icd11":
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_icd11_code ON icd11(code)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_icd11_title ON icd11(title)")
+    elif table_name == "nam":
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_nam_code ON nam(namc_code)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_nam_name_eng ON nam(name_english)")
 
     # Optional FTS5 indexing
     if fts_columns and fts_table_name:

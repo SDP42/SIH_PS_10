@@ -26,6 +26,9 @@ def create_concept_map_table(db_path: str = DB_PATH):
         equivalence TEXT DEFAULT 'equivalent'
     )
     """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cm_source ON concept_map(source_code)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cm_target ON concept_map(target_code)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cm_pair ON concept_map(source_code, target_code)")
     conn.commit()
     conn.close()
 
@@ -187,27 +190,3 @@ if __name__ == "__main__":
     create_concept_map_table()
     mappings_count = create_precise_mappings()
     print(f"concept_map table created and populated with {mappings_count} mappings.")
-    
-    # Print sample mappings (not all to avoid overwhelming output)
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    
-    print("\n" + "="*80)
-    print("SAMPLE CONCEPT MAPPINGS (by equivalence type)")
-    print("="*80)
-    
-    for equiv_type in ['equivalent', 'relatedto', 'wider']:
-        cur.execute("""
-        SELECT source_code, target_code, equivalence 
-        FROM concept_map 
-        WHERE equivalence = ? 
-        LIMIT 5
-        """, (equiv_type,))
-        
-        samples = cur.fetchall()
-        if samples:
-            print(f"\n{equiv_type.upper()} mappings:")
-            for source_code, target_code, equivalence in samples:
-                print(f"  {source_code} -> {target_code} ({equivalence})")
-    
-    conn.close()
