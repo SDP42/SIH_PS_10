@@ -149,3 +149,35 @@ def test_valueset_expand():
     body = resp.json()
     assert body["resourceType"] == "ValueSet"
     assert isinstance(body["expansion"]["contains"], list)
+
+
+def test_ai_sourced_provenance_is_schema_valid_fhir():
+    """
+    Regression guard: Provenance.target is a REQUIRED field in FHIR R4
+    (1..*). The hand-built Provenance resource $translate embeds for
+    AI-sourced matches was missing it entirely — valid-looking JSON that
+    silently failed real FHIR schema validation. This asserts the actual
+    fhir.resources Provenance model accepts every AI-sourced provenance in
+    a real $translate response, not just that the endpoint returns 200.
+    """
+    from app import ai_mapping
+    from fhir.resources.provenance import Provenance
+
+    if not ai_mapping.is_ready():
+        import pytest
+        pytest.skip("AI mapping embeddings not built")
+
+    source_rows, _ = ai_mapping._load_index()
+    checked = 0
+    for row in source_rows[:200]:
+        resp = client.get("/ConceptMap/$translate", params={"system": row["system"], "code": row["code"]})
+        if resp.status_code != 200:
+            continue
+        for param in resp.json().get("parameter", []):
+            for part in param.get("part", []) if param.get("name") == "match" else []:
+                if part.get("name") == "provenance":
+                    Provenance(**part["resource"])  # raises if schema-invalid
+                    checked += 1
+        if checked >= 5:
+            break
+    assert checked > 0, "expected at least one AI-sourced provenance in this sample to validate against"

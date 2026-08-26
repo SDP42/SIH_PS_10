@@ -117,6 +117,17 @@ def _match_part_for_ai(target_system_label: str, suggestion: Dict[str, Any]) -> 
         "resourceType": "Provenance",
         "recorded": _now_iso(),
         "agent": [{"who": {"display": AGENT_NAME}}],
+        # Provenance.target is a REQUIRED field in FHIR R4 (1..*) — this was
+        # missing before, so every AI-sourced Provenance emitted by
+        # $translate silently failed schema validation against the
+        # fhir.resources Provenance model, even though it looked fine as
+        # plain JSON. At translate-time there is no persisted resource yet
+        # (this is a preview, not a stored Condition), so target references
+        # the target concept itself by display rather than a resolvable URL
+        # — a display-only Reference is valid FHIR, and the caller
+        # (app/problem_list.py, app/fhir_extra.upload_bundle) overwrites
+        # this with a real resource reference once one actually exists.
+        "target": [{"display": f"{target_system_label} {top['icd11_code']}: {top['icd11_title']}"}],
         "extension": [
             {"url": "http://namaste.terminology/fhir/StructureDefinition/mapping-decision", "valueString": suggestion["decision"]},
             {"url": "http://namaste.terminology/fhir/StructureDefinition/mapping-confidence", "valueDecimal": top["similarity"]},
