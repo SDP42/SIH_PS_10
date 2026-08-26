@@ -100,6 +100,16 @@ def test_model_info_endpoint():
     assert body["is_medically_validated"] is False
 
 
+def test_dual_suggest_endpoint():
+    code = _sample_source_codes(1)[0]
+    resp = client.get(f"/api/ai/suggest/{code}/dual")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "tm2" in body and "biomedicine" in body
+    assert body["tm2"]["decision"] in ai_mapping.VALID_DECISIONS
+    assert body["biomedicine"]["decision"] in ai_mapping.VALID_DECISIONS
+
+
 def test_dual_candidates_independent_pools():
     # SR10 (AAA-2.1) has a curated TM2 mapping (SR10 -> vata pattern) and no
     # curated Biomedicine mapping — the two pools must stay independent.

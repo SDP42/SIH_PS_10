@@ -13,6 +13,24 @@ export const apiClient = axios.create({
   },
 });
 
+export const DEMO_AUTH_STORAGE_KEY = 'namaste_icd11_demo_auth';
+
+apiClient.interceptors.request.use((config) => {
+  const raw = localStorage.getItem(DEMO_AUTH_STORAGE_KEY);
+  if (raw) {
+    try {
+      const { access_token } = JSON.parse(raw);
+      if (access_token) {
+        config.headers = config.headers || {};
+        config.headers['Authorization'] = `Bearer ${access_token}`;
+      }
+    } catch {
+      // ignore malformed stored session
+    }
+  }
+  return config;
+});
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {

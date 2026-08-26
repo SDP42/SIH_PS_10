@@ -24,6 +24,27 @@ def _not_ready_response(e: Exception):
     )
 
 
+@router.get("/suggest/{namaste_code:path}/dual")
+def suggest_dual(namaste_code: str, source_system: Optional[str] = Query(None), top_k: int = Query(5, ge=1, le=20)):
+    """
+    Independent TM2 and Biomedicine suggestions for the same code — real
+    double-coding. Registered before /suggest/{code:path} since a `:path`
+    converter would otherwise greedily swallow "/dual" as part of the code.
+    """
+    try:
+        result = ai_mapping.get_dual_candidates(namaste_code, source_system=source_system, top_k=top_k)
+    except ai_mapping.EngineNotReadyError as e:
+        _not_ready_response(e)
+        return
+    except ai_mapping.SourceConceptNotFoundError as e:
+        raise HTTPException(status_code=404, detail={"error": "SOURCE_NOT_FOUND", "message": str(e)})
+
+    for pool_result in (result["tm2"], result["biomedicine"]):
+        if pool_result["decision"] in ("NEEDS_CONTEXT", "EXPERT_REVIEW"):
+            governance.enqueue_from_suggestion(pool_result)
+    return result
+
+
 @router.get("/suggest/{namaste_code:path}")
 def suggest(namaste_code: str, source_system: Optional[str] = Query(None), top_k: int = Query(5, ge=1, le=20)):
     """Ambiguity-aware AI suggestion for a single NAMASTE-family code."""

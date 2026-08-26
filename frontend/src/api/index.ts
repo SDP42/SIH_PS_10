@@ -262,3 +262,53 @@ export interface FhirParameters {
 
 export const translateConcept = (params: { system: string; code: string; target_system?: string }) =>
   apiClient.get<FhirParameters>('/ConceptMap/$translate', { params }).then((r) => r.data);
+
+export const uploadBundle = (bundle: Record<string, unknown>) =>
+  apiClient.post<Record<string, unknown>>('/Bundle', bundle).then((r) => r.data);
+
+export const buildProblemListEntry = (body: { namaste_code: string; source_system?: string; patient_reference?: string }) =>
+  apiClient.post<Record<string, unknown>>('/api/problem-list/build', body).then((r) => r.data);
+
+// ---- ABHA Demo Mode auth ----
+
+export interface DemoAuthSession {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  identity: { name: string; role: string };
+  mode: string;
+  disclaimer: string;
+}
+
+export const demoLogin = (name: string, role: string) =>
+  apiClient.post<DemoAuthSession>('/api/auth/demo-login', { name, role }).then((r) => r.data);
+
+export const whoami = () =>
+  apiClient.get<{ name: string; role: string; mode: string }>('/api/auth/whoami').then((r) => r.data);
+
+// ---- Audit trail (real) ----
+
+export interface AuditEvent {
+  id: number;
+  action: string;
+  actor: string;
+  target: string | null;
+  details: string | null;
+  created_at: string;
+}
+
+export const getRecentAudit = (limit = 10) =>
+  apiClient.get<{ events: AuditEvent[] }>('/api/audit/recent', { params: { limit } }).then((r) => r.data);
+
+// ---- Dual TM2 + Biomedicine AI candidates ----
+
+export interface DualAiSuggestion {
+  namaste_code: string;
+  source_system: string;
+  tm2: AiSuggestion;
+  biomedicine: AiSuggestion;
+  disclaimer: string;
+}
+
+export const getDualAiSuggestion = (code: string) =>
+  apiClient.get<DualAiSuggestion>(`/api/ai/suggest/${encodeURIComponent(code)}/dual`).then((r) => r.data);
