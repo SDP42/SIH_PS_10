@@ -28,6 +28,7 @@ export const translations: Record<string, Dict> = {
   nav_terminology: { en: 'Terminology Explorer', hi: 'शब्दावली एक्सप्लोरर', mr: 'संज्ञावली एक्सप्लोरर', gu: 'પરિભાષા એક્સપ્લોરર' },
   nav_mapping: { en: 'Mapping Intelligence', hi: 'मैपिंग इंटेलिजेंस', mr: 'मॅपिंग इंटेलिजन्स', gu: 'મેપિંગ ઇન્ટેલિજન્સ' },
   nav_ai_lab: { en: 'AI Mapping Lab', hi: 'एआई मैपिंग लैब', mr: 'एआय मॅपिंग लॅब', gu: 'AI મેપિંગ લેબ' },
+  nav_clinical_text: { en: 'Clinical Text Assistant', hi: 'क्लिनिकल टेक्स्ट सहायक', mr: 'क्लिनिकल टेक्स्ट सहाय्यक', gu: 'ક્લિનિકલ ટેક્સ્ટ સહાયક' },
   nav_review_queue: { en: 'Expert Review', hi: 'विशेषज्ञ समीक्षा', mr: 'तज्ज्ञ पुनरावलोकन', gu: 'નિષ્ણાત સમીક્ષા' },
   nav_fhir: { en: 'FHIR Workspace', hi: 'FHIR कार्यक्षेत्र', mr: 'FHIR कार्यक्षेत्र', gu: 'FHIR વર્કસ્પેસ' },
   nav_who_sync: { en: 'WHO Sync', hi: 'WHO सिंक', mr: 'WHO सिंक', gu: 'WHO સિંક' },

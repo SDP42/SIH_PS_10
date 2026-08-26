@@ -246,6 +246,20 @@ class TestSearch:
         for r in data["results"]:
             assert r["system_id"] == "icd11"
 
+    def test_search_icd11_returns_real_matches_not_silently_empty(self):
+        """
+        Regression guard: SQLite 3.35+ rejects `MATCH` against an FTS5
+        table's alias ("WHERE f MATCH ?" where `f` aliases icd11_fts),
+        raising OperationalError — which the endpoint's bare except then
+        silently swallowed into an empty result list. Every ICD-11 search
+        was returning zero hits without ever surfacing an error. A plain
+        200-with-possibly-empty-list assertion can't catch that; this
+        asserts a well-known ICD-11 term actually resolves to real codes.
+        """
+        data = client.get("/api/search", params={"q": "cough", "system": "icd11"}).json()
+        assert data["icd11_count"] > 0
+        assert any("cough" in r["display"].lower() for r in data["results"])
+
     def test_search_no_results_for_gibberish(self):
         data = client.get("/api/search", params={"q": "xyzxyzxyznonexistent123"}).json()
         assert data["total"] == 0

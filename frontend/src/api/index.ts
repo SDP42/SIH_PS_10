@@ -479,3 +479,32 @@ export interface AnalyticsOverview {
 
 export const getAnalyticsOverview = () =>
   apiClient.get<AnalyticsOverview>('/api/analytics/overview').then((r) => r.data);
+
+// ---- Human clinical-text -> terminology assistant (Phase 1) ----
+
+export interface ExtractedSymptom {
+  surface_form: string;
+  symptom: string;
+  negated: boolean;
+  duration: string | null;
+  body_site: string | null;
+  laterality: string | null;
+}
+
+export interface SymptomCandidate extends ExtractedSymptom {
+  candidates: ConceptResult[];
+  searched: boolean;
+  no_candidates_found?: boolean;
+}
+
+export interface ClinicalTextCandidatesResponse {
+  input_text: string;
+  detected_symptoms: SymptomCandidate[];
+  negated_symptoms: SymptomCandidate[];
+  diagnosis_inferred: false;
+  requires_clinician_confirmation: true;
+  safety_note: string;
+}
+
+export const getClinicalTextCandidates = (text: string) =>
+  apiClient.post<ClinicalTextCandidatesResponse>('/api/v1/clinical-text/candidates', { text }).then((r) => r.data);

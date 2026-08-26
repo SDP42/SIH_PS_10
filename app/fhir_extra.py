@@ -318,7 +318,7 @@ def expand_valueset(
                         """
                         SELECT i.code, i.title FROM icd11_fts f
                         JOIN icd11 i ON f.rowid = i.rowid
-                        WHERE f MATCH ? LIMIT ?
+                        WHERE icd11_fts MATCH ? LIMIT ?
                         """,
                         (fts_query, remaining),
                     )

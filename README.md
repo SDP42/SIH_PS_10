@@ -93,6 +93,7 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | 🏥 **EMR-Ready** | Drop-in REST API for AYUSH and allopathic EMR integration |
 | 🌐 **WHO ICD-API Sync** | Live OAuth2 sync against WHO's ICD-API with drift detection — degrades to the offline snapshot when WHO is unreachable |
 | 🗣️ **Multilingual** | Real Devanagari/Tamil/Arabic terminology search (not translated — sourced from the NAMASTE CSVs) + English/Hindi/Marathi/Gujarati UI |
+| 💬 **Clinical Text Assistant** | Free-text symptom extraction (negation/duration/site-aware) with real terminology candidates — never infers a diagnosis |
 
 ---
 
@@ -774,6 +775,44 @@ scoped deliberately: it covers the sidebar nav (always visible) and the headers 
 pages, and it never touches clinical terminology — that's real data (above), not translated copy.
 Marathi and Gujarati have no columns anywhere in the NAMASTE source data, so no clinical term is ever
 translated into them; only ordinary interface vocabulary is.
+
+## 💬 Human Clinical Text &rarr; Terminology Assistant
+
+`POST /api/v1/clinical-text/candidates` takes free text ("Patient has fever and productive cough for
+5 days") and returns real terminology candidates for each detected symptom &mdash; without ever
+inferring a diagnosis. First use of an `/api/v1` prefix in this codebase, deliberately: API versioning
+is independent of terminology-release versioning (`2025-01` vs `2026-01`).
+
+**Pipeline:** rule/lexicon extraction (symptom, negation, duration, body site, laterality) &rarr;
+canonicalization &rarr; real FTS5 search across NAMASTE (all three traditions) and ICD-11, reusing the
+exact same search machinery `/api/search` uses &mdash; no parallel index. A negated symptom
+("no fever") is shown but never searched, so it can never produce a candidate.
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/clinical-text/candidates \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Patient has no fever but has cough for 5 days."}' | python3 -m json.tool
+```
+
+Verified against every worked example in the feature's own design spec, including the hardest one:
+"no fever but has cough" correctly negates only fever &mdash; catching a real bug along the way (see
+below). The response never contains a field that could read as a diagnosis; that's enforced by a test
+that greps the response for banned field names, the same pattern used for the analytics dashboard's
+no-fabricated-encounter-data guarantee.
+
+**A real bug this feature caught, twice:**
+1. **Negation scope.** The first implementation let a negation cue ("no") reach across a clause
+   boundary ("no fever <em>but</em> has cough"), incorrectly negating both symptoms. Fixed by splitting
+   on contrastive conjunctions and tightening the negation lookback to a 4-word window &mdash; both
+   independently, so one regressing doesn't silently reopen the bug.
+2. **ICD-11 search was silently returning zero results, everywhere, on this SQLite version.**
+   `WHERE f MATCH ?` (`f` aliasing an FTS5 virtual table) raises `OperationalError` on SQLite 3.35+;
+   every call site wrapped it in a bare `except Exception: results = []`, so `/api/search`,
+   `/api/concepts`, and `ValueSet/$expand`'s ICD-11 branches had been quietly returning empty results
+   with no error surfaced. Fixed by matching against the real table name instead of the alias in all
+   four call sites (`app/api.py` &times;2, `app/fhir_extra.py`, `app/clinical_nlp.py`). A regression
+   test now asserts a real match count, not just a 200 status &mdash; the old tests only checked shape,
+   which an empty list satisfies vacuously.
 
 ## 🔧 Advanced Usage
 

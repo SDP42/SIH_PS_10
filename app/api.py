@@ -133,7 +133,7 @@ def get_concepts(
                     """
                     SELECT i.code, i.title FROM icd11_fts f
                     JOIN icd11 i ON f.rowid = i.rowid
-                    WHERE f MATCH ?
+                    WHERE icd11_fts MATCH ?
                     LIMIT ? OFFSET ?
                     """,
                     (fts_query, page_size, offset),
@@ -324,7 +324,7 @@ def search_concepts(
                 """
                 SELECT i.code, i.title FROM icd11_fts f
                 JOIN icd11 i ON f.rowid = i.rowid
-                WHERE f MATCH ?
+                WHERE icd11_fts MATCH ?
                 LIMIT ? OFFSET ?
                 """,
                 (fts_query, page_size, offset),
