@@ -37,6 +37,32 @@ def test_translate_matched_curated():
     assert any(p["name"] == "match" for p in body["parameter"])
 
 
+def test_translate_defaults_to_dual_coding():
+    """Default target_system=BOTH must return one match group per system
+    (TM2 and Biomedicine), each independently curated-first/AI-fallback."""
+    code = _find_curated_pair()
+    resp = client.get("/ConceptMap/$translate", params={"system": "NAM", "code": code})
+    assert resp.status_code == 200
+    matches = [p for p in resp.json()["parameter"] if p["name"] == "match"]
+    groups = {
+        next(x["valueString"] for x in m["part"] if x["name"] == "targetSystemGroup")
+        for m in matches
+    }
+    assert groups == {"ICD-11 TM2", "ICD-11 Biomedicine"}
+
+
+def test_translate_target_system_filter():
+    code = _find_curated_pair()
+    resp = client.get(
+        "/ConceptMap/$translate", params={"system": "NAM", "code": code, "target_system": "ICD11-TM2"}
+    )
+    assert resp.status_code == 200
+    matches = [p for p in resp.json()["parameter"] if p["name"] == "match"]
+    for m in matches:
+        group = next(x["valueString"] for x in m["part"] if x["name"] == "targetSystemGroup")
+        assert group == "ICD-11 TM2"
+
+
 def test_translate_unmatched_unknown_code():
     resp = client.get("/ConceptMap/$translate", params={"system": "NAM", "code": "NOT_A_REAL_CODE_XYZ"})
     assert resp.status_code == 200
@@ -69,6 +95,15 @@ def test_code_system_namaste():
 def test_code_system_unknown():
     resp = client.get("/CodeSystem/NOT_A_SYSTEM")
     assert resp.status_code == 404
+
+
+def test_code_system_icd11_split_tm2_biomedicine():
+    tm2 = client.get("/CodeSystem/ICD11-TM2").json()
+    biomedicine = client.get("/CodeSystem/ICD11-BIOMEDICINE").json()
+    assert tm2["count"] > 0
+    assert biomedicine["count"] > 0
+    # Biomedicine (25 chapters) must be far larger than TM2 (1 chapter)
+    assert biomedicine["count"] > tm2["count"]
 
 
 def test_valueset_expand():
