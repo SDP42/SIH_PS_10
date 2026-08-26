@@ -24,9 +24,20 @@ function DecideRow({ item, onDone }: { item: ReviewQueueItem; onDone: () => void
 
   return (
     <tr>
-      <td><span className="td-code">{item.source_code}</span><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.source_system}</div></td>
+      <td>
+        <span className="td-code">{item.source_code}</span>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.source_system}</div>
+        {item.flag_type === 'legacy_reclassification' ? (
+          <span className="badge badge-pending" style={{ marginTop: 4, fontSize: 10 }} title="A historical curated mapping was found mislabeled TM2/Biomedicine and relabeled automatically — this flags its match quality for confirmation, not the label.">
+            Legacy Reclassification
+          </span>
+        ) : (
+          <span className="badge badge-active" style={{ marginTop: 4, fontSize: 10 }}>AI Suggestion</span>
+        )}
+      </td>
       <td>
         <span className={`badge badge-${item.decision === 'NEEDS_CONTEXT' ? 'pending' : 'related'}`}>{item.decision}</span>
+        {item.target_system && <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 3 }}>{item.target_system}</div>}
       </td>
       <td>{item.ai_suggested_title || '—'}<div className="td-code" style={{ fontSize: 11 }}>{item.ai_suggested_code}</div></td>
       <td>{item.confidence !== null ? `${Math.round(item.confidence * 100)}%` : '—'}</td>
@@ -67,14 +78,20 @@ function DecideRow({ item, onDone }: { item: ReviewQueueItem; onDone: () => void
   );
 }
 
+type FlagFilter = 'all' | 'ai_suggestion' | 'legacy_reclassification';
+
 export default function ReviewQueue() {
   const [status, setStatus] = useState('pending');
+  const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
   const [toast, setToast] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['review-queue', status],
-    queryFn: () => getReviewQueue({ status, page: 1, page_size: 50 }),
+    queryFn: () => getReviewQueue({ status, page: 1, page_size: 100 }),
   });
+
+  const filteredItems = data?.items.filter((i) => flagFilter === 'all' || i.flag_type === flagFilter) ?? [];
+  const legacyCount = data?.items.filter((i) => i.flag_type === 'legacy_reclassification').length ?? 0;
 
   function handleDone() {
     setToast('Decision recorded. If approved, it is now a curated mapping in the registry.');
@@ -91,6 +108,16 @@ export default function ReviewQueue() {
         </p>
       </div>
 
+      {legacyCount > 0 && (
+        <div className="demo-banner" style={{ marginBottom: 12 }}>
+          ⚠ {legacyCount} of these items are <strong>legacy reclassifications</strong>: a one-time data audit found
+          historical curated mappings whose target_system was mislabeled TM2 when the code actually falls in a
+          Biomedicine chapter. The label was corrected automatically (that's a fact, not a judgment call) — these
+          items ask a human to confirm the underlying match itself is still correct, since it came from a fuzzy
+          matching pass that was never precision-validated.
+        </div>
+      )}
+
       {toast && (
         <div className="card mb-4" style={{ background: 'rgba(22,163,74,0.1)', borderColor: '#16a34a', fontSize: 13 }}>
           ✅ {toast}
@@ -105,6 +132,22 @@ export default function ReviewQueue() {
         ))}
       </div>
 
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        {([
+          { key: 'all', label: 'All' },
+          { key: 'ai_suggestion', label: 'AI Suggestions' },
+          { key: 'legacy_reclassification', label: `Legacy Reclassifications${legacyCount ? ` (${legacyCount})` : ''}` },
+        ] as { key: FlagFilter; label: string }[]).map((f) => (
+          <button
+            key={f.key}
+            className={`btn btn-sm ${flagFilter === f.key ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setFlagFilter(f.key)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       <div className="card">
         {isLoading ? (
           <div>{[0, 1, 2].map((i) => <div key={i} className="skeleton skeleton-line" style={{ marginBottom: 10 }} />)}</div>
@@ -113,7 +156,7 @@ export default function ReviewQueue() {
             <div className="empty-state-icon">⚠️</div>
             <div className="empty-state-title">Backend unavailable</div>
           </div>
-        ) : !data?.items.length ? (
+        ) : !filteredItems.length ? (
           <div className="empty-state">
             <div className="empty-state-icon">📭</div>
             <div className="empty-state-title">No {status} items</div>
@@ -126,7 +169,7 @@ export default function ReviewQueue() {
                 <tr><th>NAMASTE Code</th><th>AI Decision</th><th>AI Suggested Target</th><th>Confidence</th><th>Rationale</th><th>{status === 'pending' ? 'Decide' : 'Outcome'}</th></tr>
               </thead>
               <tbody>
-                {data.items.map((item) => (
+                {filteredItems.map((item) => (
                   <DecideRow key={item.id} item={item} onDone={handleDone} />
                 ))}
               </tbody>

@@ -238,6 +238,8 @@ export interface ReviewQueueItem {
   reviewer_note: string | null;
   reviewed_at: string | null;
   created_at: string;
+  flag_type: 'ai_suggestion' | 'legacy_reclassification';
+  target_system: string | null;
 }
 
 export interface ReviewQueueResponse {
