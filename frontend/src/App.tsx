@@ -9,6 +9,7 @@ import ReviewQueue from './pages/ReviewQueue';
 import FhirWorkspace from './pages/FhirWorkspace';
 import Settings from './pages/Settings';
 import DemoLogin from './pages/DemoLogin';
+import Landing from './pages/Landing';
 import { DemoAuthProvider, useDemoAuth } from './auth/DemoAuthContext';
 import './index.css';
 
@@ -26,9 +27,9 @@ export default function App() {
       <DemoAuthProvider>
         <BrowserRouter>
           <Routes>
+            <Route path="/" element={<Landing />} />
             <Route path="/login" element={<DemoLogin />} />
             <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-              <Route index element={<Navigate to="/overview" replace />} />
               <Route path="/overview" element={<Overview />} />
               <Route path="/terminology" element={<TerminologyExplorer />} />
               <Route path="/mapping" element={<MappingIntelligence />} />
