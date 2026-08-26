@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { getStats, getTerminologies } from '../api';
-import { User, Database, Key, Bell, Globe } from 'lucide-react';
+import { User, Database, Key, Globe, ShieldCheck } from 'lucide-react';
+import { useDemoAuth } from '../auth/DemoAuthContext';
 
 export default function Settings() {
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: getStats });
   const { data: terms } = useQuery({ queryKey: ['terminologies'], queryFn: getTerminologies });
+  const { session, logout } = useDemoAuth();
 
   const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  const expiresAt = session ? new Date(Date.now() + session.expires_in * 1000) : null;
 
   return (
     <div>
@@ -16,20 +19,33 @@ export default function Settings() {
       </div>
 
       <div style={{ display: 'grid', gap: 16, maxWidth: 720 }}>
-        {/* Profile */}
+        {/* Profile — real demo-session identity, not a hardcoded fake user */}
         <div className="card">
           <div className="section-header"><div className="section-title"><User size={15} style={{display:'inline',marginRight:8}} />Profile</div></div>
           {[
-            { label: 'Name', value: 'Dr. Ananya Mehta' },
-            { label: 'Role', value: 'AYUSH Terminology Expert' },
-            { label: 'Organization', value: 'All India Institute of Ayurveda (AIIA)' },
-            { label: 'Email', value: 'ananya.mehta@aiia.gov.in' },
+            { label: 'Name', value: session?.identity.name || '—' },
+            { label: 'Role', value: session?.identity.role || '—' },
           ].map(f => (
             <div key={f.label} style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
               <div style={{ width: 160, color: 'var(--text-muted)', fontWeight: 500 }}>{f.label}</div>
               <div style={{ color: 'var(--text-primary)' }}>{f.value}</div>
             </div>
           ))}
+        </div>
+
+        {/* Authentication (ABHA Demo Mode) */}
+        <div className="card">
+          <div className="section-header"><div className="section-title"><ShieldCheck size={15} style={{display:'inline',marginRight:8}} />Authentication (ABHA Demo Mode)</div></div>
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+            <div style={{ width: 160, color: 'var(--text-muted)' }}>Mode</div>
+            <div style={{ color: 'var(--text-primary)' }}>{session?.mode || '—'} <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>(not real ABHA OAuth2)</span></div>
+          </div>
+          <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+            <div style={{ width: 160, color: 'var(--text-muted)' }}>Token expires (approx.)</div>
+            <div style={{ color: 'var(--text-primary)' }}>{expiresAt ? expiresAt.toLocaleTimeString() : '—'}</div>
+          </div>
+          <div style={{ padding: '10px 0', fontSize: 12, color: 'var(--text-muted)' }}>{session?.disclaimer}</div>
+          <button className="btn btn-outline btn-sm" onClick={logout} style={{ marginTop: 8 }}>Log out</button>
         </div>
 
         {/* API Config */}
