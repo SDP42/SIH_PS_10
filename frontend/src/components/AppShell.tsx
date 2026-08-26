@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Search, GitMerge, Activity,
-  Settings, Leaf, Sparkles, ClipboardCheck, LogOut
+  Settings, Leaf, Sparkles, ClipboardCheck, LogOut, Globe
 } from 'lucide-react';
 import { getStats } from '../api';
 import { useDemoAuth } from '../auth/DemoAuthContext';
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/ai-lab', icon: Sparkles, label: 'AI Mapping Lab' },
   { to: '/review-queue', icon: ClipboardCheck, label: 'Expert Review' },
   { to: '/fhir', icon: Activity, label: 'FHIR Workspace' },
+  { to: '/who-sync', icon: Globe, label: 'WHO Sync' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

@@ -17,10 +17,19 @@ class TestConceptMapAPI:
     """Test the ConceptMap FHIR API endpoints"""
     
     def test_root_endpoint(self):
-        """Test the root endpoint returns service information"""
+        """
+        Root serves the React SPA when frontend/dist exists (how the deployed
+        service actually runs — build.sh builds the frontend), and falls back
+        to the service-information JSON when it does not. Assert whichever
+        mode this checkout is in rather than assuming an unbuilt frontend.
+        """
         response = client.get("/")
         assert response.status_code == 200
-        
+
+        if os.path.isdir(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")):
+            assert "text/html" in response.headers["content-type"]
+            return
+
         data = response.json()
         assert data["message"] == "AYUSH ICD-11 Terminology Microservice"
         assert data["version"] == "0.1.0"

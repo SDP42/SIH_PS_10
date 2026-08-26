@@ -363,3 +363,7 @@ tr:hover td { background: var(--bg-card-hover); }
   .grid-2 { grid-template-columns: 1fr; }
   .detail-panel { width: 100%; }
 }
+
+/* Sync button spinner — used by the WHO Sync page's in-flight state. */
+.spin { animation: spin 900ms linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

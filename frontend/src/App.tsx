@@ -7,6 +7,7 @@ import MappingIntelligence from './pages/MappingIntelligence';
 import AiMappingLab from './pages/AiMappingLab';
 import ReviewQueue from './pages/ReviewQueue';
 import FhirWorkspace from './pages/FhirWorkspace';
+import WhoSync from './pages/WhoSync';
 import Settings from './pages/Settings';
 import DemoLogin from './pages/DemoLogin';
 import Landing from './pages/Landing';
@@ -36,6 +37,7 @@ export default function App() {
               <Route path="/ai-lab" element={<AiMappingLab />} />
               <Route path="/review-queue" element={<ReviewQueue />} />
               <Route path="/fhir" element={<FhirWorkspace />} />
+              <Route path="/who-sync" element={<WhoSync />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>

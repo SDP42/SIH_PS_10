@@ -189,7 +189,36 @@ bug became a governance demo instead of a footnote.
 Upload and point out the `Authorization: Bearer …` header is being attached automatically from the
 login token — "this isn't decorative auth, it's actually enforced."
 
-### 3.9 Settings (`/settings`)
+### 3.9 WHO Sync (`/who-sync`) — answers the "what about updates?" question
+
+**Purpose:** Every other screen reads a static ICD-11 snapshot (`data/ICD-11.csv`, Jan 2025). This
+screen is the live half — it authenticates against WHO's real ICD-API, resolves codes through it, and
+reports **drift**: mapping targets whose WHO title no longer matches ours, or that have left the
+release.
+
+**Why built this way:** A judge who knows the domain will ask *"what happens when WHO publishes an
+update?"* Without this screen the honest answer is "nothing — we'd go stale silently." Three design
+choices are worth saying out loud:
+
+- **Provenance is always explicit.** Every answer is badged `Live from WHO`, `WHO (cached)`, or
+  `Offline snapshot`. We never let snapshot data pass as live.
+- **It cannot take the demo down.** No credentials, no Wi-Fi, WHO rate-limiting — each degrades to
+  the local snapshot and says why. A credential-less sync is logged as `SKIPPED_NO_CREDENTIALS`, not
+  as an error. Turning the Wi-Fi off in front of the judges is a *safe* thing to do on this page.
+- **Drift is raised, never auto-applied.** Same discipline as the AI engine: an upstream string
+  change does not silently rewrite a curated mapping. It queues for a human.
+
+**How to demo:** Look up a code (e.g. `1A00`) and point at the provenance badge and the
+snapshot-vs-WHO side-by-side. Then hit **Sync with WHO** and show the run landing in the history
+table with the operator's name stamped on it — the same audit trail the governance queue writes to.
+
+**Say this, don't oversell it:** the integration is built, tested and degrades honestly, but until
+WHO API credentials are registered and set (`ICD_API_CLIENT_ID` / `ICD_API_CLIENT_SECRET`) the
+service runs in `SNAPSHOT_ONLY` mode — and the page's own banner says exactly that. Register free at
+icd.who.int/icdapi if you want the live badge for the pitch. **Do not claim "we are live with WHO"
+until you have actually seen a `Live from WHO` badge.**
+
+### 3.10 Settings (`/settings`)
 
 **Purpose:** Session/config transparency screen — who you're logged in as, when the token expires, what
 backend URL the frontend is pointed at, and a live snapshot of connected terminology systems.
@@ -211,6 +240,8 @@ actual configured API base URL) — there is no hardcoded fake user profile.
    it.*
 6. **FHIR Workspace** (1.5 min) — `$translate` on a matched and an unmatched code, then Bundle Upload to
    show the auth token actually gating a write.
+7. **WHO Sync** (45s) — close on the "how does this stay current?" answer: look up one code, show the
+   provenance badge, run a sync, point at the run appearing in the history table.
 
 ## 5. What's real vs. demo-mode (say this out loud, don't wait to be asked)
 
@@ -221,9 +252,10 @@ tiers, the governance approve/reject → registry write/delete path, `$translate
 
 **Demo-mode / not built** — say this before a judge finds it: real ABHA OAuth2 (this is a labeled
 stand-in), the `Consent` resource (one static stub, no consent is actually collected), ISO 22600 access
-control, SNOMED CT/LOINC semantics, and a live sync job against the WHO ICD-API (the Biomedicine/TM2
-data already present locally was sufficient for tonight's build). Full detail in `README.md`'s "What's
-real vs. demo-mode" section.
+control, SNOMED CT/LOINC semantics, and a *verified* live WHO round-trip — the ICD-API
+integration is fully built and tested (see 3.9), but no WHO credentials have been registered yet, so
+it has never actually reached WHO's servers. Full detail in `README.md`'s "What's real vs.
+demo-mode" section.
 
 ## 6. Running it for the presentation
 

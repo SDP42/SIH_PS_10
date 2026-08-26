@@ -317,3 +317,97 @@ export interface DualAiSuggestion {
 
 export const getDualAiSuggestion = (code: string) =>
   apiClient.get<DualAiSuggestion>(`/api/ai/suggest/${encodeURIComponent(code)}/dual`).then((r) => r.data);
+
+// ---- WHO ICD-11 API synchronisation ----
+
+export type WhoProvenance = 'WHO_LIVE' | 'WHO_CACHE' | 'LOCAL_SNAPSHOT';
+
+export interface WhoSyncRun {
+  id: number;
+  run_at: string;
+  release_id: string;
+  actor: string | null;
+  mode: string;
+  codes_checked: number;
+  confirmed: number;
+  drifted: number;
+  missing: number;
+  errored: number;
+  duration_seconds: number | null;
+  detail: string | null;
+}
+
+export interface WhoStatus {
+  credentials_configured: boolean;
+  snapshot_release: string;
+  snapshot_label: string;
+  token_endpoint: string;
+  api_root: string;
+  registration_url: string;
+  last_sync: WhoSyncRun | null;
+  codes_cached_from_who: number;
+  mapping_target_codes: number;
+  coverage_pct: number;
+  open_drift_items: number;
+  mode: 'LIVE_CAPABLE' | 'SNAPSHOT_ONLY';
+  disclaimer: string;
+}
+
+export interface WhoReleases {
+  provenance: WhoProvenance;
+  degraded_reason?: string | null;
+  snapshot_release: string;
+  releases: string[];
+  latest: string | null;
+  snapshot_is_latest?: boolean | null;
+}
+
+export interface WhoCodeLookup {
+  code: string;
+  release_id: string;
+  provenance: WhoProvenance;
+  degraded_reason: string | null;
+  who: {
+    entity_id: string | null;
+    title: string | null;
+    definition: string | null;
+    class_kind: string | null;
+    browser_url: string | null;
+  } | null;
+  local: { code: string; title: string; class_kind: string; chapter: string } | null;
+  comparison: { status: string; message: string; local_title?: string; who_title?: string };
+  checked_at: string;
+  disclaimer: string;
+}
+
+export interface WhoDriftItem {
+  code: string;
+  release_id: string;
+  drift_type: string;
+  local_title: string | null;
+  who_title: string | null;
+  detected_at: string;
+}
+
+export interface WhoSyncResult extends Omit<WhoSyncRun, 'id' | 'actor'> {
+  results: Array<{ code: string; status: string; local_title?: string | null; who_title?: string | null; browser_url?: string | null }>;
+  disclaimer: string;
+}
+
+export const getWhoStatus = () =>
+  apiClient.get<WhoStatus>('/api/who/status').then((r) => r.data);
+
+export const getWhoReleases = () =>
+  apiClient.get<WhoReleases>('/api/who/releases').then((r) => r.data);
+
+export const lookupWhoCode = (code: string, opts: { release?: string; force?: boolean } = {}) =>
+  apiClient.get<WhoCodeLookup>(`/api/who/code/${encodeURIComponent(code)}`, { params: opts }).then((r) => r.data);
+
+export const getWhoDrift = (limit = 100) =>
+  apiClient.get<{ items: WhoDriftItem[] }>('/api/who/drift', { params: { limit } }).then((r) => r.data);
+
+export const getWhoHistory = (limit = 20) =>
+  apiClient.get<{ runs: WhoSyncRun[] }>('/api/who/history', { params: { limit } }).then((r) => r.data);
+
+export const runWhoSync = (body: { limit?: number; release?: string } = {}) =>
+  apiClient.post<WhoSyncResult>('/api/who/sync', body).then((r) => r.data);

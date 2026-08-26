@@ -33,12 +33,14 @@ import app.ai_mapping as _ai_mapping
 import app.governance as _governance
 import app.fhir_extra as _fhir_extra
 import app.audit as _audit
+import app.who_sync as _who_sync
 
-for _mod in (_api, _conceptmap, _ai_mapping, _governance, _fhir_extra, _audit):
+for _mod in (_api, _conceptmap, _ai_mapping, _governance, _fhir_extra, _audit, _who_sync):
     _mod.DB_PATH = TEST_DB_PATH
 
 _governance.ensure_schema()
 _audit.ensure_schema()
+_who_sync.ensure_schema()
 
 
 @pytest.fixture

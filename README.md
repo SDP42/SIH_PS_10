@@ -91,6 +91,7 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | ⚙️ **One-Command Setup** | `python scripts/init.py` — downloads data, builds DB, generates mappings |
 | 📊 **Audit Exports** | CSV + summary exports for governance and clinical review |
 | 🏥 **EMR-Ready** | Drop-in REST API for AYUSH and allopathic EMR integration |
+| 🌐 **WHO ICD-API Sync** | Live OAuth2 sync against WHO's ICD-API with drift detection — degrades to the offline snapshot when WHO is unreachable |
 
 ---
 
@@ -305,6 +306,17 @@ uvicorn app.main:app
 | `GET` | `/api/mappings/{id}` | — | Full detail for a single mapping |
 | `GET` | `/api/terminologies` | — | Terminology system metadata |
 | `GET` | `/api/concept/{system}/{code}` | — | Single concept with its mappings |
+
+### WHO ICD-11 Synchronisation (`/api/who/`)
+
+| Method | Endpoint | Query Params | Description |
+|--------|----------|-------------|-------------|
+| `GET` | `/api/who/status` | — | Live-vs-snapshot posture: credentials, last sync, cache coverage, open drift |
+| `GET` | `/api/who/releases` | — | ICD-11 MMS releases WHO publishes, and whether our snapshot is the latest |
+| `GET` | `/api/who/code/{code}` | `release`, `force` | Resolve one code against WHO, with explicit provenance |
+| `GET` | `/api/who/drift` | `limit` | Codes whose WHO title no longer matches the snapshot |
+| `GET` | `/api/who/history` | `limit` | Past sync runs, including ones that could not reach WHO |
+| `POST` | `/api/who/sync` | body: `limit`, `release` | Run a sync pass — **requires ABHA Demo Mode auth** |
 
 ### Example Calls
 
@@ -599,6 +611,73 @@ Workspace** gained `$translate` (now dual-coded by default), **Bundle Upload (Do
 real audit trail, not a hardcoded array; **AppShell** shows the real logged-in identity and a real
 backend-liveness ping instead of a static "Operational" dot.
 
+### WHO ICD-11 API synchronisation
+
+Everything else in this service reads `db/ayush_icd11_combined.db`, whose `icd11` table is a **static
+snapshot** of WHO's MMS linearization (`data/ICD-11.csv`, version column
+`version_2025_jan_24_-_22_30_utc`). That is fine for a demo and wrong for a production terminology
+service: WHO revises ICD-11 on a release cadence, and a bridge built on a frozen copy silently rots.
+
+`app/who_sync.py` is the live half.
+
+**What it does**
+
+1. **Authenticates** against WHO's OAuth 2.0 token service
+   (`https://icdaccessmanagement.who.int/connect/token`, `client_credentials` grant, scope
+   `icdapi_access`), caching the token in-process until shortly before expiry.
+2. **Resolves codes** the way the ICD-API actually works — two steps, not one:
+   `GET /icd/release/11/{release}/mms/codeinfo/{code}` returns a *stem entity URI*, and that URI
+   carries the real title, definition and browser link.
+3. **Detects drift.** For each ICD-11 code we actually depend on (the `concept_map` targets), it
+   compares WHO's current title to our snapshot and classifies the result:
+
+   | Verdict | Meaning |
+   |---------|---------|
+   | `CONFIRMED` | WHO agrees with our snapshot |
+   | `TITLE_DRIFT` | WHO has retitled the code since our snapshot |
+   | `NOT_IN_WHO_RELEASE` | the code is gone from the requested release |
+   | `LOCAL_ONLY` | WHO was not consulted (degraded mode) |
+
+   Drift is **raised for a human**, never auto-applied — the same discipline the AI mapping engine
+   follows. A mapping is not silently rewritten because a string changed upstream.
+4. **Sweeps forward.** Each run takes the least-recently-verified batch, so repeated syncs walk the
+   whole corpus instead of re-checking the same head.
+
+**Three things this deliberately gets right**
+
+- **It cannot take the demo down.** No public function in `who_sync.py` raises on a network or
+  credential failure. Missing credentials, dead Wi-Fi, a WHO rate-limit — each degrades to the local
+  snapshot and reports *why*. A sync with no credentials is logged as `SKIPPED_NO_CREDENTIALS`, not
+  as an error.
+- **Provenance is never implied.** Every answer is stamped `WHO_LIVE`, `WHO_CACHE`, or
+  `LOCAL_SNAPSHOT`, and the UI renders that as a badge. Snapshot data is never presented as live.
+- **No new runtime weight.** It uses `requests`, already a dependency. Nothing here loads a model or
+  allocates a large array, so the service's memory profile on a small instance is unchanged.
+
+**Title normalisation gotcha.** `data/ICD-11.csv` encodes tree depth as a literal `- - - ` prefix on
+each title (`- - - Cholera`). WHO's API returns the bare title. Without stripping that presentation
+artifact, *every single code* would be reported as drifted — `who_sync.normalize_title()` handles it,
+and `tests/test_who_sync.py` locks the behaviour down.
+
+**Enabling live mode**
+
+Registration is free at [icd.who.int/icdapi](https://icd.who.int/icdapi). Then:
+
+```bash
+export ICD_API_CLIENT_ID="your-client-id"
+export ICD_API_CLIENT_SECRET="your-client-secret"
+```
+
+On Render, set the same two keys as environment variables in the service dashboard. Without them the
+service runs exactly as before, in `SNAPSHOT_ONLY` mode, with a banner on the WHO Sync page saying so.
+
+**Tests.** `tests/test_who_sync.py` (18 tests) covers both halves: the degraded paths (no
+credentials, unreachable WHO, auth enforcement on `POST /sync`) and the live path against a stubbed
+ICD-API (token flow, `codeinfo` → entity resolution, cache hit/bypass, drift raised and cleared,
+batch abort on transport failure, `http://` → `https://` upgrade of WHO's own URIs).
+
+---
+
 ### What's real vs. demo-mode
 
 **Real** (live computation, covered by `pytest`, no mocked data):
@@ -608,15 +687,21 @@ backend-liveness ping instead of a static "Operational" dot.
   `POST /api/problem-list/build` — real double-coding throughout.
 - ABHA Demo Mode auth enforcement (real 401s, real token verification) and the audit trail.
 - The original 468 curated mappings and 5-pass algorithm, now correctly TM2/Biomedicine-labeled.
+- WHO ICD-API synchronisation: OAuth 2.0 client-credentials flow, two-step `codeinfo` → stem-entity
+  resolution, drift detection, caching, and graceful snapshot fallback (see below for the one
+  caveat — it has not yet been exercised against WHO's real servers).
 
 **Not built / explicitly out of scope** — do not claim these to judges:
+- **A verified live WHO call.** The WHO sync integration is fully implemented and tested against a
+  stubbed ICD-API, but no WHO credentials have been registered yet, so it has never completed a
+  round-trip to WHO's real servers. Until `ICD_API_CLIENT_ID` / `ICD_API_CLIENT_SECRET` are set and
+  a sync is run, the service is in `SNAPSHOT_ONLY` mode and the UI says so. Say "the integration is
+  built and degrades honestly", not "we are live with WHO".
 - **Real ABHA OAuth2** — the auth flow above is a clearly-labeled demo stub, not a connection to
   India's actual ABHA gateway.
 - **`Consent`** — a single static stub resource; no consent is ever actually collected or verified.
 - **ISO 22600 access control** — not implemented; the demo-auth gate is a partial answer at best.
 - **SNOMED CT / LOINC semantics** — no licensed data source available; not attempted.
-- **Live WHO ICD-API sync** — the Biomedicine/TM2 data already present locally covers what's needed
-  tonight; a live sync job to pull WHO's incremental updates was not built.
 - **"WHO International Terminologies of Ayurveda"** — the `ast` table (labeled "Ayurveda Standard
   Terminology") has not been verified as that exact WHO-published vocabulary; treat it as
   best-available data, flagged as such in its `CodeSystem` response.
