@@ -66,6 +66,9 @@ db/*.db
 db/*.db-journal
 *.sqlite3
 
+# Ignore precomputed AI mapping embeddings (rebuild via scripts/build_embeddings.py)
+db/embeddings/
+
 # Ignore data directory having csv files
 data/*.csv
 

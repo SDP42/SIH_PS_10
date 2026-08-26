@@ -498,6 +498,89 @@ LIMIT 150;
 
 ---
 
+## 🤖 AI / Governance Layer (New)
+
+The 5-pass algorithm above is precision-first and deliberately conservative — it only produces
+468 mappings, leaving thousands of NAMASTE-family codes (`nam`/`nsm`/`num`/`ast`) with **no**
+curated ICD-11 equivalent. The AI layer targets exactly that gap, without ever silently guessing.
+
+### Ambiguity-aware AI mapping engine
+
+`scripts/build_embeddings.py` encodes every NAMASTE-family concept and every ICD-11 TM2 concept
+with `sentence-transformers` (**all-MiniLM-L6-v2** — general-purpose, 384-dim, fast on CPU;
+`cambridgeltl/SapBERT-from-PubMedBERT-fulltext` was evaluated but skipped as too large/slow for a
+same-night offline build — see the script's docstring for the full rationale). Vectors are stored
+as `.npy` files under `db/embeddings/` (not blobbed into SQLite), with an `embedding_index` table
+mapping vector position → system/code/display text.
+
+`app/ai_mapping.py` scores every ICD-11 candidate against a source concept's vector with plain
+`numpy` cosine similarity (no FAISS/vector DB — unnecessary at this scale, ~40k vectors fit
+comfortably in memory), blended with a lexical word-overlap signal, and classifies the result into
+one of four **transparent decisions** — named threshold constants, never a silent guess:
+
+| Decision | Meaning |
+|---|---|
+| `AUTO_SUGGEST` | Strong top score, clearly separated from the runner-up |
+| `NEEDS_CONTEXT` | Moderate score, or several close candidates — genuinely ambiguous |
+| `EXPERT_REVIEW` | Weak but non-trivial signal |
+| `NO_VALIDATED_EQUIVALENT` | Every candidate below the floor — the engine refuses to guess |
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/ai/suggest/{code}` | Ranked candidates + decision + rationale for one code |
+| `GET` | `/api/ai/unmapped` | Paginated NAMASTE-family codes with no curated mapping |
+| `POST` | `/api/ai/batch_suggest` | Suggestions for a code list, or `{"all_unmapped": true, "limit": 50}` |
+| `GET` | `/api/ai/model-info` | Embedding model + build metadata |
+
+### FHIR completeness
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/ConceptMap/$translate?system=&code=` | Curated-first, AI-fallback; `result:false`/`equivalence:"unmatched"` when nothing validates |
+| `GET` | `/CodeSystem/{NAM\|NSM\|NUM\|AST\|ICD11}` | `content:"not-present"` + a real live count |
+| `GET` | `/ValueSet/$expand?filter=&system=` | Real FTS5 search wrapped in FHIR `expansion.contains` |
+
+AI-sourced `$translate` results carry an inline FHIR `Provenance` resource (agent, decision,
+confidence) as a `provenance` parameter.
+
+### Human-in-the-loop governance
+
+`NEEDS_CONTEXT`/`EXPERT_REVIEW` suggestions auto-enqueue into a `review_queue` table. A reviewer
+decision of `approved` writes a **new** row into the existing `concept_map` table
+(`source="ai_reviewed_v1"`, vs `"rule_v1"` for the original 468) — an approved AI suggestion
+becomes a first-class curated mapping without ever mutating history.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/governance/queue?status=` | Paginated, filterable review queue |
+| `POST` | `/api/governance/{id}/decide` | `{status, note}` — `approved` writes a new `concept_map` row |
+
+### Frontend
+
+Two new pages: **AI Mapping Lab** (`/ai-lab`) — search any code, see the decision + ranked
+candidates + rationale, run the AI over the next 50 unmapped codes — and **Expert Review**
+(`/review-queue`) — approve/reject queue items and watch the registry grow. **FHIR Workspace**
+gained a live `$translate` tester tab. **Overview** now shows live unmapped-gap and review-queue
+counts alongside the original `/api/stats` cards.
+
+### What's real vs. demo-mode
+
+**Real** (live computation, covered by `pytest`, no mocked data):
+- All of Phase 1–4 above: embeddings, hybrid scoring, decision tiering, the governance
+  approve→registry write path, and the new FHIR operations.
+- The original 468 curated mappings and 5-pass algorithm (unchanged).
+
+**Not built / explicitly out of scope this pass** — do not claim these to judges:
+- `POST /Bundle` ingestion and the `Consent` resource.
+- **ICD-11 Biomedicine dual-coding** — this repo has no Biomedicine data source at all (NAMASTE ↔
+  ICD-11 **TM2** only); any Biomedicine-labeled UI text elsewhere is illustrative, not backed by data.
+- ABHA OAuth / real authentication — this service has no auth layer.
+- A 2D embedding/ambiguity-map visualization (Phase 5 in the build plan) — not built.
+- The "run batch" demo button is a single synchronous call + final table, not a live-streaming
+  progress UI.
+
+---
+
 ## 🔧 Advanced Usage
 
 ```bash
