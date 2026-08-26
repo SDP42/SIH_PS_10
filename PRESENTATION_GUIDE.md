@@ -212,11 +212,14 @@ choices are worth saying out loud:
 snapshot-vs-WHO side-by-side. Then hit **Sync with WHO** and show the run landing in the history
 table with the operator's name stamped on it — the same audit trail the governance queue writes to.
 
-**Say this, don't oversell it:** the integration is built, tested and degrades honestly, but until
-WHO API credentials are registered and set (`ICD_API_CLIENT_ID` / `ICD_API_CLIENT_SECRET`) the
-service runs in `SNAPSHOT_ONLY` mode — and the page's own banner says exactly that. Register free at
-icd.who.int/icdapi if you want the live badge for the pitch. **Do not claim "we are live with WHO"
-until you have actually seen a `Live from WHO` badge.**
+**This is verified, not aspirational — say the actual numbers.** On the first real sync against
+WHO's live release-file CDN (no credentials needed), our 2025-01 snapshot turned out to be a full
+release behind: WHO published 2026-01 in January. 454 of 456 mapping-target codes still matched
+exactly; 2 glaucoma codes (`9C6Y`, `9C6Z`) have been retired from WHO's current classification. The
+ICD-API path (needs the registered credentials) was separately verified live — `GET 1A00` returns
+WHO's actual "Cholera" definition in real time. **Lead the demo with the drift finding** — "we
+checked against WHO this morning and found we're one release behind, here's exactly where" is a far
+stronger sentence than any UI screenshot.
 
 ### 3.10 Settings (`/settings`)
 
@@ -252,10 +255,8 @@ tiers, the governance approve/reject → registry write/delete path, `$translate
 
 **Demo-mode / not built** — say this before a judge finds it: real ABHA OAuth2 (this is a labeled
 stand-in), the `Consent` resource (one static stub, no consent is actually collected), ISO 22600 access
-control, SNOMED CT/LOINC semantics, and a *verified* live WHO round-trip — the ICD-API
-integration is fully built and tested (see 3.9), but no WHO credentials have been registered yet, so
-it has never actually reached WHO's servers. Full detail in `README.md`'s "What's real vs.
-demo-mode" section.
+control, and SNOMED CT/LOINC semantics. The WHO sync (3.9) is fully live and verified on both
+sources — nothing to caveat there. Full detail in `README.md`'s "What's real vs. demo-mode" section.
 
 ## 6. Running it for the presentation
 

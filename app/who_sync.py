@@ -27,9 +27,25 @@ Design constraints this module is built around:
    here loads a model or allocates a large array — the service's memory
    profile is unchanged.
 
-Credentials: register a free client at https://icd.who.int/icdapi and set
-ICD_API_CLIENT_ID / ICD_API_CLIENT_SECRET. Without them this module still
-runs, in snapshot-only mode.
+There are **two** WHO sources here, because the obvious one has a barrier:
+
+  * **Release files (default, no credentials).** WHO publishes each ICD-11
+    MMS release as a Simple Tabulation file on its own CDN
+    (icdcdn.who.int/static/releasefiles/...), with no login, no OAuth and no
+    registration. That file is the authoritative published release — in fact
+    it is byte-for-byte the format of our own local snapshot. Diffing a
+    freshly downloaded release against our snapshot is real synchronisation
+    against real WHO data, and it needs nothing but an outbound HTTPS call.
+    It also checks *every* mapping target in one pass instead of trickling
+    through a rate-limited API.
+
+  * **The ICD-API (optional, needs credentials).** Register a free client at
+    https://icd.who.int/icdapi and set ICD_API_CLIENT_ID /
+    ICD_API_CLIENT_SECRET to enable per-code live resolution with
+    definitions and browser links. Without them this half simply stays off.
+
+Both write the same drift verdicts into the same registry, so the governance
+story does not change with the source — only the provenance label does.
 """
 import os
 import re
@@ -53,7 +69,15 @@ API_ROOT = "https://id.who.int/icd/release/11"
 SNAPSHOT_RELEASE = "2025-01"
 SNAPSHOT_LABEL = "2025-01-24 22:30 UTC (data/ICD-11.csv)"
 
+# WHO's public release-file CDN — no authentication of any kind. This is the
+# same file our local snapshot was built from (identical column layout, right
+# down to the trailing "Version:..." column).
+RELEASE_FILE_BASE = "https://icdcdn.who.int/static/releasefiles"
+RELEASE_FILE_NAME = "SimpleTabulation-ICD-11-MMS-en"
+RELEASES_INDEX_URL = "https://icd.who.int/browse/releases/mms/en"
+
 REQUEST_TIMEOUT = 8       # seconds — a hung WHO call must not hang a page load
+DOWNLOAD_TIMEOUT = 120    # a release file is a few MB; give it room
 CACHE_TTL_SECONDS = 7 * 24 * 3600
 MAX_SYNC_BATCH = 100      # hard ceiling; WHO is a shared public service
 
@@ -61,6 +85,12 @@ MAX_SYNC_BATCH = 100      # hard ceiling; WHO is a shared public service
 PROV_WHO_LIVE = "WHO_LIVE"
 PROV_WHO_CACHE = "WHO_CACHE"
 PROV_LOCAL_SNAPSHOT = "LOCAL_SNAPSHOT"
+PROV_WHO_RELEASE_FILE = "WHO_RELEASE_FILE"
+
+# Sync sources
+SOURCE_RELEASE_FILE = "release_file"   # default — needs no credentials
+SOURCE_API = "api"                     # needs ICD_API_CLIENT_ID/SECRET
+VALID_SOURCES = {SOURCE_RELEASE_FILE, SOURCE_API}
 
 # ── Comparison verdicts ──────────────────────────────────────────────────
 CMP_CONFIRMED = "CONFIRMED"                  # WHO title matches our snapshot
@@ -121,6 +151,10 @@ def ensure_schema() -> None:
             detail TEXT
         )
     """)
+    cur.execute("PRAGMA table_info(who_sync_log)")
+    if "source" not in {r[1] for r in cur.fetchall()}:
+        cur.execute(f"ALTER TABLE who_sync_log ADD COLUMN source TEXT DEFAULT '{SOURCE_API}'")
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS who_drift (
             code TEXT NOT NULL,
@@ -130,6 +164,25 @@ def ensure_schema() -> None:
             who_title TEXT,
             detected_at TEXT NOT NULL,
             PRIMARY KEY (code, release_id)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS who_release_cache (
+            release_id TEXT NOT NULL,
+            code TEXT NOT NULL,
+            title TEXT,
+            class_kind TEXT,
+            chapter_no TEXT,
+            PRIMARY KEY (release_id, code)
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS who_release_meta (
+            release_id TEXT PRIMARY KEY,
+            version_label TEXT,
+            code_count INTEGER,
+            source_url TEXT,
+            downloaded_at TEXT NOT NULL
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_who_sync_log_run ON who_sync_log(run_at DESC)")
@@ -333,25 +386,24 @@ def _cache_put(cur, code: str, release_id: str, entity: Optional[Dict[str, Any]]
 
 # ── WHO lookups ──────────────────────────────────────────────────────────
 def list_releases() -> Dict[str, Any]:
-    """Available ICD-11 MMS releases straight from WHO, or a degraded report."""
+    """
+    Available ICD-11 MMS releases. Prefers WHO's public release index (no
+    credentials needed) since that is the source `run_release_sync` actually
+    uses; falls back to the authenticated API's release list, then to the
+    local snapshot, if that is somehow unreachable too.
+    """
+    via_files = discover_releases()
+    if via_files["provenance"] == PROV_WHO_RELEASE_FILE:
+        return via_files
+
     if not credentials_configured():
-        return {
-            "provenance": PROV_LOCAL_SNAPSHOT,
-            "degraded_reason": "WHO ICD-API credentials not configured.",
-            "snapshot_release": SNAPSHOT_RELEASE,
-            "releases": [SNAPSHOT_RELEASE],
-            "latest": None,
-        }
+        return via_files  # already LOCAL_SNAPSHOT with a degraded_reason set
+
     try:
         payload = _who_get(f"{API_ROOT}/mms") or {}
     except WhoApiError as e:
-        return {
-            "provenance": PROV_LOCAL_SNAPSHOT,
-            "degraded_reason": str(e),
-            "snapshot_release": SNAPSHOT_RELEASE,
-            "releases": [SNAPSHOT_RELEASE],
-            "latest": None,
-        }
+        via_files["degraded_reason"] = f"{via_files.get('degraded_reason')}; ICD-API also failed: {e}"
+        return via_files
 
     releases = [uri.rstrip("/").rsplit("/", 2)[-2] if uri.rstrip("/").endswith("/mms") else uri.rstrip("/").rsplit("/", 1)[-1]
                 for uri in payload.get("release", [])]
@@ -444,24 +496,43 @@ def fetch_code(code: str, release_id: Optional[str] = None, force: bool = False)
                     "code": code,
                 } if cached["found"] else None
 
+        if provenance == PROV_LOCAL_SNAPSHOT and credentials_configured():
+            try:
+                who = _fetch_from_who(code, release_id)
+                provenance = PROV_WHO_LIVE
+                _cache_put(cur, code, release_id, who)
+                conn.commit()
+            except WhoApiError as e:
+                degraded_reason = f"{e} — falling back to WHO's public release file."
+
         if provenance == PROV_LOCAL_SNAPSHOT:
-            if not credentials_configured():
+            # No usable ICD-API answer (no credentials, or the API call above
+            # failed) — fall back to WHO's credential-free release file. This
+            # is still a real WHO source, just without per-code definitions
+            # or a browser link.
+            try:
+                release = fetch_release_table(release_id)
+                who_title = release["table"].get(code)
+                provenance = PROV_WHO_RELEASE_FILE
+                if who_title is not None:
+                    who = {"entity_id": None, "title": who_title, "definition": None,
+                           "class_kind": None, "browser_url": None, "code": code}
+                if not credentials_configured():
+                    degraded_reason = (
+                        (degraded_reason + " " if degraded_reason else "")
+                        + "WHO ICD-API credentials not configured — resolved against WHO's public "
+                          "release file instead (no definitions/browser link available via this route). "
+                          "Register at https://icd.who.int/icdapi for per-code API detail."
+                    )
+            except WhoApiError as e:
                 degraded_reason = (
-                    "WHO ICD-API credentials not configured — serving the offline snapshot. "
-                    "Register at https://icd.who.int/icdapi and set ICD_API_CLIENT_ID / ICD_API_CLIENT_SECRET."
+                    (degraded_reason + " " if degraded_reason else "")
+                    + f"WHO release file also unavailable: {e} — serving the offline snapshot."
                 )
-            else:
-                try:
-                    who = _fetch_from_who(code, release_id)
-                    provenance = PROV_WHO_LIVE
-                    _cache_put(cur, code, release_id, who)
-                    conn.commit()
-                except WhoApiError as e:
-                    degraded_reason = f"{e} — serving the offline snapshot instead."
 
         comparison = (
             _compare(local, who)
-            if provenance in (PROV_WHO_LIVE, PROV_WHO_CACHE)
+            if provenance in (PROV_WHO_LIVE, PROV_WHO_CACHE, PROV_WHO_RELEASE_FILE)
             else {"status": CMP_LOCAL_ONLY, "message": "WHO was not consulted for this lookup."}
         )
 
@@ -474,6 +545,259 @@ def fetch_code(code: str, release_id: Optional[str] = None, force: bool = False)
             "local": local,
             "comparison": comparison,
             "checked_at": datetime.now(timezone.utc).isoformat(),
+            "disclaimer": DISCLAIMER,
+        }
+    finally:
+        conn.close()
+
+
+# ── WHO release files (credential-free source) ───────────────────────────
+def release_file_url(release_id: str) -> str:
+    return f"{RELEASE_FILE_BASE}/{release_id}/{RELEASE_FILE_NAME}.zip"
+
+
+def discover_releases() -> Dict[str, Any]:
+    """
+    Release ids straight off WHO's public release index — no credentials.
+    Returns the ids newest-first plus whichever one our snapshot is.
+    """
+    try:
+        resp = requests.get(RELEASES_INDEX_URL, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        return {
+            "provenance": PROV_LOCAL_SNAPSHOT,
+            "degraded_reason": f"Could not reach WHO's release index: {e}",
+            "releases": [SNAPSHOT_RELEASE],
+            "latest": None,
+            "snapshot_release": SNAPSHOT_RELEASE,
+        }
+
+    ids = sorted({m for m in re.findall(r"20\d{2}-\d{2}", resp.text)}, reverse=True)
+    latest = ids[0] if ids else None
+    return {
+        "provenance": PROV_WHO_RELEASE_FILE,
+        "releases": ids,
+        "latest": latest,
+        "snapshot_release": SNAPSHOT_RELEASE,
+        "snapshot_is_latest": (latest == SNAPSHOT_RELEASE) if latest else None,
+        "releases_behind": (ids.index(SNAPSHOT_RELEASE) if SNAPSHOT_RELEASE in ids else None),
+    }
+
+
+def _parse_release_tsv(text: str) -> Tuple[List[Tuple[str, str, str, str]], Optional[str]]:
+    """
+    Parse a Simple Tabulation file into (code, title, class_kind, chapter) rows.
+
+    The layout is identical to our own snapshot's — the final header cell is a
+    'Version:...' stamp which we keep as the release's human-readable label.
+    Rows without a Code are groupings/blocks, which carry no code to map to.
+    """
+    import csv as _csv
+    import io as _io
+
+    reader = _csv.DictReader(_io.StringIO(text), delimiter="\t")
+    version_label = None
+    for field in (reader.fieldnames or []):
+        if field and field.strip().lower().startswith("version"):
+            version_label = field.split(":", 1)[-1].strip()
+
+    rows = []
+    for row in reader:
+        code = (row.get("Code") or "").strip()
+        if not code:
+            continue
+        rows.append((
+            code,
+            (row.get("Title") or "").strip(),
+            (row.get("ClassKind") or "").strip(),
+            (row.get("ChapterNo") or "").strip(),
+        ))
+    return rows, version_label
+
+
+def fetch_release_table(release_id: str, force: bool = False) -> Dict[str, Any]:
+    """
+    Return {code: title} for a WHO release, downloading and caching the
+    official release file on first use. Raises WhoApiError on failure so the
+    caller can decide how to degrade.
+    """
+    import io as _io
+    import zipfile as _zipfile
+
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        if not force:
+            cur.execute("SELECT * FROM who_release_meta WHERE release_id = ?", (release_id,))
+            meta = cur.fetchone()
+            if meta:
+                cur.execute("SELECT code, title FROM who_release_cache WHERE release_id = ?", (release_id,))
+                table = {r["code"]: r["title"] for r in cur.fetchall()}
+                if table:
+                    return {"table": table, "meta": dict(meta), "downloaded": False}
+
+        url = release_file_url(release_id)
+        try:
+            resp = requests.get(url, timeout=DOWNLOAD_TIMEOUT)
+        except requests.RequestException as e:
+            raise WhoApiError(f"Could not download WHO release file {release_id}: {e}")
+        if resp.status_code == 404:
+            raise WhoApiError(f"WHO publishes no Simple Tabulation file for release {release_id}.")
+        if resp.status_code != 200:
+            raise WhoApiError(f"WHO release file {release_id} returned HTTP {resp.status_code}.")
+
+        try:
+            archive = _zipfile.ZipFile(_io.BytesIO(resp.content))
+            # The zip also carries a readme.txt and an .xlsx copy — match
+            # the data file by its known stem, not just any ".txt" (readme.txt
+            # sorts first in some zips and was silently "parsed" as 0 rows).
+            name = next(n for n in archive.namelist() if RELEASE_FILE_NAME in n and n.endswith(".txt"))
+            text = archive.read(name).decode("utf-8-sig")
+        except (_zipfile.BadZipFile, StopIteration, UnicodeDecodeError) as e:
+            raise WhoApiError(f"WHO release file {release_id} could not be read: {e}")
+
+        rows, version_label = _parse_release_tsv(text)
+        if not rows:
+            raise WhoApiError(f"WHO release file {release_id} contained no coded entities.")
+
+        cur.execute("DELETE FROM who_release_cache WHERE release_id = ?", (release_id,))
+        cur.executemany(
+            "INSERT OR REPLACE INTO who_release_cache (release_id, code, title, class_kind, chapter_no) VALUES (?, ?, ?, ?, ?)",
+            [(release_id, c, t, k, ch) for c, t, k, ch in rows],
+        )
+        cur.execute(
+            """INSERT INTO who_release_meta (release_id, version_label, code_count, source_url, downloaded_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(release_id) DO UPDATE SET
+                 version_label=excluded.version_label, code_count=excluded.code_count,
+                 source_url=excluded.source_url, downloaded_at=excluded.downloaded_at""",
+            (release_id, version_label, len(rows), url, datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+
+        cur.execute("SELECT * FROM who_release_meta WHERE release_id = ?", (release_id,))
+        return {"table": {c: t for c, t, _, _ in rows}, "meta": dict(cur.fetchone()), "downloaded": True}
+    finally:
+        conn.close()
+
+
+def run_release_sync(release_id: Optional[str] = None, actor: str = "system") -> Dict[str, Any]:
+    """
+    Diff **every** mapping-target code against a real WHO release file.
+
+    Unlike the API sweep this is a single download plus a local comparison, so
+    there is no batching and no rate limit to respect — one run covers the
+    whole corpus. Never raises: a failed download is reported as a FAILED run.
+    """
+    started = time.time()
+    run_at = datetime.now(timezone.utc).isoformat()
+
+    if release_id is None:
+        discovered = discover_releases()
+        release_id = discovered.get("latest") or SNAPSHOT_RELEASE
+
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        try:
+            # A sync run is a deliberate, explicit operator action (not a
+            # background poll) — always re-download rather than serving a
+            # cached copy of this release, otherwise pressing "Sync with
+            # WHO" twice in a row would silently do nothing the second time.
+            release = fetch_release_table(release_id, force=True)
+        except WhoApiError as e:
+            cur.execute(
+                """INSERT INTO who_sync_log (run_at, release_id, actor, mode, source, duration_seconds, detail)
+                   VALUES (?, ?, ?, 'FAILED', ?, ?, ?)""",
+                (run_at, release_id, actor, SOURCE_RELEASE_FILE, round(time.time() - started, 3), str(e)),
+            )
+            conn.commit()
+            return {
+                "mode": "FAILED", "source": SOURCE_RELEASE_FILE, "run_at": run_at,
+                "release_id": release_id, "codes_checked": 0,
+                "confirmed": 0, "drifted": 0, "missing": 0, "errored": 1,
+                "results": [], "detail": str(e), "disclaimer": DISCLAIMER,
+            }
+
+        who_table = release["table"]
+
+        cur.execute(
+            """SELECT DISTINCT cm.target_code AS code, i.title AS local_title
+               FROM concept_map cm LEFT JOIN icd11 i ON i.code = cm.target_code
+               WHERE TRIM(COALESCE(cm.target_code, '')) != ''
+               ORDER BY cm.target_code"""
+        )
+        targets = cur.fetchall()
+
+        counts = {"confirmed": 0, "drifted": 0, "missing": 0, "errored": 0}
+        results: List[Dict[str, Any]] = []
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        for row in targets:
+            code, local_title = row["code"], row["local_title"]
+            who_title = who_table.get(code)
+
+            if who_title is None:
+                status = CMP_NOT_IN_RELEASE
+                counts["missing"] += 1
+            elif normalize_title(local_title) == normalize_title(who_title):
+                status = CMP_CONFIRMED
+                counts["confirmed"] += 1
+            else:
+                status = CMP_TITLE_DRIFT
+                counts["drifted"] += 1
+
+            if status == CMP_CONFIRMED:
+                cur.execute("DELETE FROM who_drift WHERE code = ? AND release_id = ?", (code, release_id))
+            else:
+                cur.execute(
+                    """INSERT INTO who_drift (code, release_id, drift_type, local_title, who_title, detected_at)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(code, release_id) DO UPDATE SET
+                         drift_type=excluded.drift_type, local_title=excluded.local_title,
+                         who_title=excluded.who_title, detected_at=excluded.detected_at""",
+                    (code, release_id, status, _display_title(local_title),
+                     _display_title(who_title) if who_title else None, now_iso),
+                )
+                results.append({
+                    "code": code,
+                    "status": status,
+                    "local_title": _display_title(local_title),
+                    "who_title": _display_title(who_title) if who_title else None,
+                })
+
+        duration = round(time.time() - started, 3)
+        meta = release["meta"]
+        detail = (
+            f"Compared all {len(targets)} mapping-target codes against WHO's official "
+            f"{release_id} release file ({meta.get('code_count')} coded entities, "
+            f"version {meta.get('version_label')}). Snapshot release is {SNAPSHOT_RELEASE}."
+        )
+
+        cur.execute(
+            """INSERT INTO who_sync_log
+                 (run_at, release_id, actor, mode, source, codes_checked, confirmed, drifted, missing, errored, duration_seconds, detail)
+               VALUES (?, ?, ?, 'COMPLETED', ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (run_at, release_id, actor, SOURCE_RELEASE_FILE, len(targets), counts["confirmed"],
+             counts["drifted"], counts["missing"], counts["errored"], duration, detail),
+        )
+        conn.commit()
+
+        return {
+            "mode": "COMPLETED",
+            "source": SOURCE_RELEASE_FILE,
+            "run_at": run_at,
+            "release_id": release_id,
+            "release_version_label": meta.get("version_label"),
+            "release_code_count": meta.get("code_count"),
+            "release_source_url": meta.get("source_url"),
+            "snapshot_release": SNAPSHOT_RELEASE,
+            "codes_checked": len(targets),
+            **counts,
+            "duration_seconds": duration,
+            "results": results,
+            "detail": detail,
             "disclaimer": DISCLAIMER,
         }
     finally:
@@ -501,12 +825,13 @@ def _codes_to_sync(cur, limit: int) -> List[str]:
     return [r["code"] for r in cur.fetchall()]
 
 
-def run_sync(limit: int = 25, release_id: Optional[str] = None, actor: str = "system") -> Dict[str, Any]:
+def run_api_sync(limit: int = 25, release_id: Optional[str] = None, actor: str = "system") -> Dict[str, Any]:
     """
     Check a batch of our mapping-target ICD-11 codes against the live WHO
-    release, record drift, and write a sync-log row. Returns a summary; a
-    missing-credentials or unreachable-WHO run is reported as mode SKIPPED,
-    not as an error, so the caller can render it calmly.
+    ICD-API (needs ICD_API_CLIENT_ID/SECRET), record drift, and write a
+    sync-log row. Returns a summary; a missing-credentials or unreachable-WHO
+    run is reported as mode SKIPPED, not as an error, so the caller can
+    render it calmly. See run_release_sync() for the credential-free source.
     """
     release_id = release_id or SNAPSHOT_RELEASE
     limit = max(1, min(int(limit), MAX_SYNC_BATCH))
@@ -522,13 +847,14 @@ def run_sync(limit: int = 25, release_id: Optional[str] = None, actor: str = "sy
                 "The service continues to serve the offline ICD-11 snapshot."
             )
             cur.execute(
-                """INSERT INTO who_sync_log (run_at, release_id, actor, mode, codes_checked, duration_seconds, detail)
-                   VALUES (?, ?, ?, 'SKIPPED_NO_CREDENTIALS', 0, ?, ?)""",
-                (run_at, release_id, actor, round(time.time() - started, 3), detail),
+                """INSERT INTO who_sync_log (run_at, release_id, actor, mode, source, codes_checked, duration_seconds, detail)
+                   VALUES (?, ?, ?, 'SKIPPED_NO_CREDENTIALS', ?, 0, ?, ?)""",
+                (run_at, release_id, actor, SOURCE_API, round(time.time() - started, 3), detail),
             )
             conn.commit()
             return {
                 "mode": "SKIPPED_NO_CREDENTIALS",
+                "source": SOURCE_API,
                 "run_at": run_at,
                 "release_id": release_id,
                 "codes_checked": 0,
@@ -598,15 +924,16 @@ def run_sync(limit: int = 25, release_id: Optional[str] = None, actor: str = "sy
 
         cur.execute(
             """INSERT INTO who_sync_log
-                 (run_at, release_id, actor, mode, codes_checked, confirmed, drifted, missing, errored, duration_seconds, detail)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (run_at, release_id, actor, mode, len(results), counts["confirmed"], counts["drifted"],
+                 (run_at, release_id, actor, mode, source, codes_checked, confirmed, drifted, missing, errored, duration_seconds, detail)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (run_at, release_id, actor, mode, SOURCE_API, len(results), counts["confirmed"], counts["drifted"],
              counts["missing"], counts["errored"], duration, detail),
         )
         conn.commit()
 
         return {
             "mode": mode,
+            "source": SOURCE_API,
             "run_at": run_at,
             "release_id": release_id,
             "codes_checked": len(results),
@@ -622,17 +949,44 @@ def run_sync(limit: int = 25, release_id: Optional[str] = None, actor: str = "sy
 
 # ── Read models for the dashboard ────────────────────────────────────────
 def status() -> Dict[str, Any]:
+    """
+    Live-vs-snapshot posture. Two independent WHO sources are tracked
+    separately because they have different reach: the release-file sync
+    needs no credentials and checks every mapping target in one pass; the
+    ICD-API sync needs registration and checks codes one at a time.
+    """
     conn = _conn()
     cur = conn.cursor()
     try:
         cur.execute("SELECT * FROM who_sync_log ORDER BY id DESC LIMIT 1")
         last = cur.fetchone()
+        cur.execute(
+            "SELECT * FROM who_sync_log WHERE source = ? AND mode = 'COMPLETED' ORDER BY id DESC LIMIT 1",
+            (SOURCE_RELEASE_FILE,),
+        )
+        last_release_sync = cur.fetchone()
+        cur.execute(
+            "SELECT * FROM who_sync_log WHERE source = ? ORDER BY id DESC LIMIT 1",
+            (SOURCE_API,),
+        )
+        last_api_sync = cur.fetchone()
+
         cur.execute("SELECT COUNT(*) AS n FROM who_entity_cache WHERE found = 1")
-        cached = cur.fetchone()["n"]
+        api_cached = cur.fetchone()["n"]
         cur.execute("SELECT COUNT(*) AS n FROM who_drift")
         drift_count = cur.fetchone()["n"]
         cur.execute("SELECT COUNT(DISTINCT target_code) AS n FROM concept_map WHERE TRIM(COALESCE(target_code,'')) != ''")
         total_targets = cur.fetchone()["n"]
+
+        release_checked = last_release_sync["codes_checked"] if last_release_sync else 0
+        release_coverage = round(100.0 * release_checked / total_targets, 1) if total_targets else 0.0
+
+        if last_release_sync:
+            mode = "LIVE_VERIFIED"       # a real release-file diff has completed at least once
+        elif credentials_configured():
+            mode = "LIVE_CAPABLE"        # API credentials present, nothing synced yet
+        else:
+            mode = "SNAPSHOT_ONLY"       # nothing has ever been verified against WHO
 
         return {
             "credentials_configured": credentials_configured(),
@@ -640,13 +994,17 @@ def status() -> Dict[str, Any]:
             "snapshot_label": SNAPSHOT_LABEL,
             "token_endpoint": TOKEN_URL,
             "api_root": API_ROOT,
+            "release_file_base": RELEASE_FILE_BASE,
             "registration_url": "https://icd.who.int/icdapi",
             "last_sync": dict(last) if last else None,
-            "codes_cached_from_who": cached,
+            "last_release_sync": dict(last_release_sync) if last_release_sync else None,
+            "last_api_sync": dict(last_api_sync) if last_api_sync else None,
+            "release_sync_coverage_pct": release_coverage,
+            "codes_cached_from_who": api_cached,
             "mapping_target_codes": total_targets,
-            "coverage_pct": round(100.0 * cached / total_targets, 1) if total_targets else 0.0,
+            "coverage_pct": release_coverage or (round(100.0 * api_cached / total_targets, 1) if total_targets else 0.0),
             "open_drift_items": drift_count,
-            "mode": "LIVE_CAPABLE" if credentials_configured() else "SNAPSHOT_ONLY",
+            "mode": mode,
             "disclaimer": DISCLAIMER,
         }
     finally:

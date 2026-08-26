@@ -320,7 +320,7 @@ export const getDualAiSuggestion = (code: string) =>
 
 // ---- WHO ICD-11 API synchronisation ----
 
-export type WhoProvenance = 'WHO_LIVE' | 'WHO_CACHE' | 'LOCAL_SNAPSHOT';
+export type WhoProvenance = 'WHO_LIVE' | 'WHO_CACHE' | 'WHO_RELEASE_FILE' | 'LOCAL_SNAPSHOT';
 
 export interface WhoSyncRun {
   id: number;
@@ -328,6 +328,7 @@ export interface WhoSyncRun {
   release_id: string;
   actor: string | null;
   mode: string;
+  source: 'release_file' | 'api';
   codes_checked: number;
   confirmed: number;
   drifted: number;
@@ -343,13 +344,17 @@ export interface WhoStatus {
   snapshot_label: string;
   token_endpoint: string;
   api_root: string;
+  release_file_base: string;
   registration_url: string;
   last_sync: WhoSyncRun | null;
+  last_release_sync: WhoSyncRun | null;
+  last_api_sync: WhoSyncRun | null;
+  release_sync_coverage_pct: number;
   codes_cached_from_who: number;
   mapping_target_codes: number;
   coverage_pct: number;
   open_drift_items: number;
-  mode: 'LIVE_CAPABLE' | 'SNAPSHOT_ONLY';
+  mode: 'LIVE_VERIFIED' | 'LIVE_CAPABLE' | 'SNAPSHOT_ONLY';
   disclaimer: string;
 }
 
@@ -360,6 +365,7 @@ export interface WhoReleases {
   releases: string[];
   latest: string | null;
   snapshot_is_latest?: boolean | null;
+  releases_behind?: number | null;
 }
 
 export interface WhoCodeLookup {
@@ -391,6 +397,8 @@ export interface WhoDriftItem {
 
 export interface WhoSyncResult extends Omit<WhoSyncRun, 'id' | 'actor'> {
   results: Array<{ code: string; status: string; local_title?: string | null; who_title?: string | null; browser_url?: string | null }>;
+  release_version_label?: string | null;
+  release_code_count?: number | null;
   disclaimer: string;
 }
 
@@ -409,5 +417,10 @@ export const getWhoDrift = (limit = 100) =>
 export const getWhoHistory = (limit = 20) =>
   apiClient.get<{ runs: WhoSyncRun[] }>('/api/who/history', { params: { limit } }).then((r) => r.data);
 
-export const runWhoSync = (body: { limit?: number; release?: string } = {}) =>
+/** Default sync — diffs every mapping target against WHO's public release file. No credentials needed. */
+export const runWhoReleaseSync = (body: { release?: string } = {}) =>
   apiClient.post<WhoSyncResult>('/api/who/sync', body).then((r) => r.data);
+
+/** ICD-API sweep — needs ICD_API_CLIENT_ID/SECRET server-side; adds definitions + browser links. */
+export const runWhoApiSync = (body: { limit?: number; release?: string } = {}) =>
+  apiClient.post<WhoSyncResult>('/api/who/sync/api', body).then((r) => r.data);

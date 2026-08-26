@@ -1,9 +1,13 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # picks up ICD_API_CLIENT_ID / ICD_API_CLIENT_SECRET etc. from .env if present
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app import conceptmap, api, ai_router, governance, governance_router, fhir_extra, auth, audit, problem_list, consent, who_sync, who_router
-import os
 
 governance.ensure_schema()
 audit.ensure_schema()

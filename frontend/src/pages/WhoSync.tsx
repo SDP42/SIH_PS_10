@@ -2,25 +2,30 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Globe, RefreshCw, AlertTriangle, CheckCircle2, CloudOff, ExternalLink, Search } from 'lucide-react';
 import {
-  getWhoStatus, getWhoReleases, getWhoDrift, getWhoHistory, runWhoSync, lookupWhoCode,
+  getWhoStatus, getWhoReleases, getWhoDrift, getWhoHistory, runWhoReleaseSync, runWhoApiSync, lookupWhoCode,
   type WhoCodeLookup, type WhoProvenance,
 } from '../api';
 
 const PROVENANCE_LABEL: Record<WhoProvenance, { text: string; badge: string; hint: string }> = {
   WHO_LIVE: {
-    text: 'Live from WHO',
+    text: 'Live from WHO ICD-API',
     badge: 'badge-equivalent',
-    hint: 'Fetched from the WHO ICD-API just now.',
+    hint: 'Fetched from the WHO ICD-API just now — a real OAuth2 call with a real answer.',
   },
   WHO_CACHE: {
-    text: 'WHO (cached)',
+    text: 'WHO ICD-API (cached)',
     badge: 'badge-related',
-    hint: 'A previous live WHO response, still within its cache window.',
+    hint: 'A previous live ICD-API response, still within its cache window.',
+  },
+  WHO_RELEASE_FILE: {
+    text: 'WHO release file (live)',
+    badge: 'badge-equivalent',
+    hint: "Resolved against WHO's own published release file — no credentials needed, real WHO data.",
   },
   LOCAL_SNAPSHOT: {
     text: 'Offline snapshot',
     badge: 'badge-pending',
-    hint: 'WHO was not reachable or not configured — served from the local ICD-11 snapshot.',
+    hint: 'WHO was not reachable — served from the local ICD-11 snapshot.',
   },
 };
 
@@ -162,26 +167,40 @@ export default function WhoSync() {
   const { data: drift } = useQuery({ queryKey: ['who-drift'], queryFn: () => getWhoDrift(100) });
   const { data: history } = useQuery({ queryKey: ['who-history'], queryFn: () => getWhoHistory(10) });
 
-  const sync = useMutation({
-    mutationFn: () => runWhoSync({ limit: 25 }),
-    onSuccess: (res) => {
-      setToast(
-        res.mode === 'SKIPPED_NO_CREDENTIALS'
-          ? 'No WHO credentials configured — the service kept serving the offline snapshot.'
-          : `Checked ${res.codes_checked} codes: ${res.confirmed} confirmed, ${res.drifted} drifted, ${res.missing} missing.`
-      );
-      setTimeout(() => setToast(null), 6000);
-      qc.invalidateQueries({ queryKey: ['who-status'] });
-      qc.invalidateQueries({ queryKey: ['who-drift'] });
-      qc.invalidateQueries({ queryKey: ['who-history'] });
-    },
+  const afterSync = (res: { mode: string; codes_checked: number; confirmed: number; drifted: number; missing: number }, label: string) => {
+    setToast(
+      res.mode === 'SKIPPED_NO_CREDENTIALS'
+        ? 'No WHO ICD-API credentials configured — the service kept serving the offline snapshot.'
+        : res.mode === 'FAILED'
+        ? `${label} could not reach WHO — see sync history for the reason.`
+        : `${label}: checked ${res.codes_checked} codes — ${res.confirmed} confirmed, ${res.drifted} drifted, ${res.missing} missing.`
+    );
+    setTimeout(() => setToast(null), 7000);
+    qc.invalidateQueries({ queryKey: ['who-status'] });
+    qc.invalidateQueries({ queryKey: ['who-drift'] });
+    qc.invalidateQueries({ queryKey: ['who-history'] });
+  };
+
+  const releaseSync = useMutation({
+    mutationFn: () => runWhoReleaseSync({}),
+    onSuccess: (res) => afterSync(res, 'Release-file sync'),
     onError: () => {
       setToast('Sync could not be started — are you signed in?');
       setTimeout(() => setToast(null), 5000);
     },
   });
 
-  const live = status?.mode === 'LIVE_CAPABLE';
+  const apiSync = useMutation({
+    mutationFn: () => runWhoApiSync({ limit: 25 }),
+    onSuccess: (res) => afterSync(res, 'ICD-API sync'),
+    onError: () => {
+      setToast('Sync could not be started — are you signed in?');
+      setTimeout(() => setToast(null), 5000);
+    },
+  });
+
+  const liveVerified = status?.mode === 'LIVE_VERIFIED';
+  const liveCapable = status?.mode !== 'SNAPSHOT_ONLY';
 
   return (
     <div>
@@ -198,18 +217,28 @@ export default function WhoSync() {
         </p>
       </div>
 
-      {!isLoading && !live && (
+      {!isLoading && !liveCapable && (
         <div className="demo-banner" style={{ marginBottom: 14, alignItems: 'flex-start' }}>
           <CloudOff size={14} style={{ flexShrink: 0, marginTop: 3 }} />
           {/* .demo-banner is a flex row, so mixed inline content has to be wrapped
               in a single child or every element becomes its own flex column. */}
           <span>
-            <strong>Snapshot-only mode.</strong> No WHO ICD-API credentials are configured, so every
+            <strong>Snapshot-only mode.</strong> Nothing has been verified against WHO yet, so every
             answer below comes from the offline ICD-11 snapshot ({status?.snapshot_label}) and is
-            labelled as such. This is a deliberate degradation, not a failure — the service stays
-            fully functional without WHO connectivity. To go live, register a free client at{' '}
+            labelled as such. Press <strong>Sync with WHO</strong> below to check live — it needs no
+            credentials. For per-code definitions and browser links too, register a free client at{' '}
             <a href={status?.registration_url} target="_blank" rel="noreferrer">icd.who.int/icdapi</a>{' '}
             and set <code>ICD_API_CLIENT_ID</code> / <code>ICD_API_CLIENT_SECRET</code>.
+          </span>
+        </div>
+      )}
+
+      {!isLoading && liveVerified && (
+        <div className="demo-banner" style={{ marginBottom: 14, background: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)', color: '#4ade80' }}>
+          <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
+          <span>
+            <strong>Live-verified.</strong> The last release-file sync actually reached WHO's servers
+            and compared every mapping target against a real, freshly downloaded release.
           </span>
         </div>
       )}
@@ -219,8 +248,12 @@ export default function WhoSync() {
       <div className="grid-4" style={{ marginBottom: 18 }}>
         <Stat
           label="Connection mode"
-          value={live ? 'Live' : 'Snapshot'}
-          sub={live ? 'WHO ICD-API credentials present' : 'Offline ICD-11 snapshot'}
+          value={liveVerified ? 'Live-verified' : liveCapable ? 'Live-capable' : 'Snapshot'}
+          sub={
+            status?.credentials_configured
+              ? 'Release file + ICD-API both available'
+              : 'Release file available, no ICD-API credentials'
+          }
         />
         <Stat
           label="Snapshot release"
@@ -229,14 +262,14 @@ export default function WhoSync() {
             releases?.latest
               ? releases.snapshot_is_latest
                 ? 'Matches WHO’s latest release'
-                : `WHO’s latest is ${releases.latest}`
+                : `WHO is ${releases.releases_behind ?? '?'} release(s) ahead — latest is ${releases.latest}`
               : 'WHO release list unavailable'
           }
         />
         <Stat
           label="Verified against WHO"
-          value={`${status?.codes_cached_from_who ?? 0} / ${status?.mapping_target_codes ?? 0}`}
-          sub={`${status?.coverage_pct ?? 0}% of mapping targets checked`}
+          value={`${status?.release_sync_coverage_pct ?? 0}%`}
+          sub="of mapping targets checked via release file"
         />
         <Stat
           label="Open drift items"
@@ -250,25 +283,45 @@ export default function WhoSync() {
           <div>
             <div className="section-title">Run a synchronisation pass</div>
             <div className="section-subtitle">
-              Checks the next 25 least-recently-verified mapping-target codes against WHO. Repeated
-              runs sweep forward through the corpus rather than re-checking the same batch.
+              <strong>Sync with WHO</strong> diffs every mapping target against WHO's own published
+              release file — no credentials needed, one pass covers the whole corpus.{' '}
+              <strong>Refresh via ICD-API</strong> additionally pulls definitions and browser links
+              for a batch of codes, and needs WHO ICD-API credentials.
             </div>
           </div>
-          <button className="btn btn-primary" disabled={sync.isPending} onClick={() => sync.mutate()}>
-            <RefreshCw size={14} className={sync.isPending ? 'spin' : undefined} />
-            {sync.isPending ? 'Syncing…' : 'Sync with WHO'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button className="btn btn-primary" disabled={releaseSync.isPending} onClick={() => releaseSync.mutate()}>
+              <RefreshCw size={14} className={releaseSync.isPending ? 'spin' : undefined} />
+              {releaseSync.isPending ? 'Syncing…' : 'Sync with WHO'}
+            </button>
+            <button
+              className="btn btn-outline"
+              disabled={apiSync.isPending || !status?.credentials_configured}
+              onClick={() => apiSync.mutate()}
+              title={status?.credentials_configured ? undefined : 'Set ICD_API_CLIENT_ID / ICD_API_CLIENT_SECRET to enable'}
+            >
+              <RefreshCw size={14} className={apiSync.isPending ? 'spin' : undefined} />
+              {apiSync.isPending ? 'Syncing…' : 'Refresh via ICD-API'}
+            </button>
+          </div>
         </div>
 
-        {status?.last_sync ? (
+        {status?.last_release_sync ? (
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            Last run <strong>{new Date(status.last_sync.run_at).toLocaleString()}</strong> by{' '}
-            {status.last_sync.actor || 'system'} — {status.last_sync.mode.replace(/_/g, ' ').toLowerCase()},{' '}
-            {status.last_sync.codes_checked} codes checked.
-            <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>{status.last_sync.detail}</div>
+            Last release-file sync <strong>{new Date(status.last_release_sync.run_at).toLocaleString()}</strong> by{' '}
+            {status.last_release_sync.actor || 'system'} — {status.last_release_sync.mode.replace(/_/g, ' ').toLowerCase()},{' '}
+            {status.last_release_sync.codes_checked} codes checked against release{' '}
+            {status.last_release_sync.release_id}.
+            <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>{status.last_release_sync.detail}</div>
           </div>
         ) : (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No synchronisation has been run yet.</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No release-file sync has been run yet.</div>
+        )}
+        {status?.last_api_sync && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+            Last ICD-API sync <strong>{new Date(status.last_api_sync.run_at).toLocaleString()}</strong> —{' '}
+            {status.last_api_sync.mode.replace(/_/g, ' ').toLowerCase()}, {status.last_api_sync.codes_checked} codes.
+          </div>
         )}
       </div>
 
