@@ -33,6 +33,7 @@ export const translations: Record<string, Dict> = {
   nav_fhir: { en: 'FHIR Workspace', hi: 'FHIR कार्यक्षेत्र', mr: 'FHIR कार्यक्षेत्र', gu: 'FHIR વર્કસ્પેસ' },
   nav_who_sync: { en: 'WHO Sync', hi: 'WHO सिंक', mr: 'WHO सिंक', gu: 'WHO સિંક' },
   nav_analytics: { en: 'Analytics', hi: 'विश्लेषण', mr: 'विश्लेषण', gu: 'વિશ્લેષણ' },
+  nav_developer_portal: { en: 'Developer Portal', hi: 'डेवलपर पोर्टल', mr: 'डेव्हलपर पोर्टल', gu: 'ડેવલપર પોર્ટલ' },
   nav_settings: { en: 'Settings', hi: 'सेटिंग्स', mr: 'सेटिंग्ज', gu: 'સેટિંગ્સ' },
 
   // Sidebar footer / status

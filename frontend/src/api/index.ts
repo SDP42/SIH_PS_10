@@ -508,3 +508,67 @@ export interface ClinicalTextCandidatesResponse {
 
 export const getClinicalTextCandidates = (text: string) =>
   apiClient.post<ClinicalTextCandidatesResponse>('/api/v1/clinical-text/candidates', { text }).then((r) => r.data);
+
+// ---- API Key / Developer Platform ----
+
+export interface ApiClient {
+  id: number;
+  name: string;
+  organization: string | null;
+  status: string;
+}
+
+export interface ApiKeyMeta {
+  id: number;
+  client_id: number;
+  key_type: string;
+  key_prefix: string;
+  scopes: string[];
+  rate_limit_per_minute: number;
+  label: string | null;
+  created_by?: string;
+  created_at?: string;
+  expires_at: string | null;
+  revoked_at?: string | null;
+  rotated_from_id?: number | null;
+  last_used_at?: string | null;
+}
+
+export interface ApiKeyCreated extends ApiKeyMeta {
+  secret: string;
+  warning: string;
+}
+
+export interface ApiUsageSummary {
+  key_id: number;
+  window_hours: number;
+  total_requests: number;
+  by_path: Array<{ path: string; n: number }>;
+  recent: Array<{ method: string; path: string; status_code: number | null; occurred_at: string }>;
+}
+
+export const createApiClient = (name: string, organization?: string) =>
+  apiClient.post<ApiClient>('/api/v1/api-keys/clients', { name, organization }).then((r) => r.data);
+
+export const createApiKey = (body: { client_id: number; key_type: string; label?: string; expires_in_days?: number }) =>
+  apiClient.post<ApiKeyCreated>('/api/v1/api-keys', body).then((r) => r.data);
+
+export const listApiKeys = (client_id?: number) =>
+  apiClient.get<{ keys: ApiKeyMeta[] }>('/api/v1/api-keys', { params: client_id ? { client_id } : {} }).then((r) => r.data);
+
+export const rotateApiKey = (id: number) =>
+  apiClient.post<ApiKeyCreated>(`/api/v1/api-keys/${id}/rotate`).then((r) => r.data);
+
+export const revokeApiKey = (id: number) =>
+  apiClient.post<ApiKeyMeta>(`/api/v1/api-keys/${id}/revoke`).then((r) => r.data);
+
+export const getApiKeyUsage = (id: number, hours = 24) =>
+  apiClient.get<ApiUsageSummary>(`/api/v1/api-keys/${id}/usage`, { params: { hours } }).then((r) => r.data);
+
+export const getApiScopes = () =>
+  apiClient.get<{ all_scopes: string[]; defaults_by_key_type: Record<string, string[]>; rate_limits_by_key_type: Record<string, number> }>(
+    '/api/v1/api-keys/scopes'
+  ).then((r) => r.data);
+
+export const getCapabilityStatement = () =>
+  apiClient.get<Record<string, unknown>>('/api/v1/CapabilityStatement').then((r) => r.data);

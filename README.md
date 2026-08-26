@@ -94,6 +94,7 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | 🌐 **WHO ICD-API Sync** | Live OAuth2 sync against WHO's ICD-API with drift detection — degrades to the offline snapshot when WHO is unreachable |
 | 🗣️ **Multilingual** | Real Devanagari/Tamil/Arabic terminology search (not translated — sourced from the NAMASTE CSVs) + English/Hindi/Marathi/Gujarati UI |
 | 💬 **Clinical Text Assistant** | Free-text symptom extraction (negation/duration/site-aware) with real terminology candidates — never infers a diagnosis |
+| 🔑 **API Key Developer Platform** | Real key issuance, scopes, rate limiting, rotation/revocation, and a versioned `/api/v1` surface an EMR could actually integrate against |
 
 ---
 
@@ -813,6 +814,49 @@ no-fabricated-encounter-data guarantee.
    four call sites (`app/api.py` &times;2, `app/fhir_extra.py`, `app/clinical_nlp.py`). A regression
    test now asserts a real match count, not just a 200 status &mdash; the old tests only checked shape,
    which an empty list satisfies vacuously.
+
+## 🔑 API Key / Developer Platform
+
+The credential system an external EMR vendor actually integrates against &mdash; separate from the
+clinician-facing ABHA Demo Mode login. Two identity systems now exist on purpose: one answers "which
+clinician is acting" for the web UI, the other answers "which external client is calling the API."
+
+**Five key types**, each with a default scope grant and a tiered rate limit (sandbox tightest, admin
+loosest): `sandbox`, `readonly`, `translation`, `fhir_integration`, `admin`. The plaintext secret is
+shown exactly once, at creation or rotation &mdash; only its SHA-256 hash is ever stored, and a
+non-secret prefix (`nsk_sandbox_AbC123...`) is kept so a key can be recognised in a list without the
+full secret ever being retrievable again.
+
+```bash
+# 1. Create a client + sandbox key (requires ABHA Demo Mode auth, like governance decisions)
+curl -s -X POST http://localhost:8000/api/v1/api-keys/clients \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name": "Apollo Hospitals EMR"}'
+curl -s -X POST http://localhost:8000/api/v1/api-keys \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"client_id": 1, "key_type": "sandbox"}'
+
+# 2. Call the versioned public API with the key (no clinician login needed)
+curl -s "http://localhost:8000/api/v1/terminology/search?q=fever" -H "X-API-Key: $SECRET"
+curl -s "http://localhost:8000/api/v1/translate?system=NAM&code=AA-1" -H "X-API-Key: $SECRET"
+curl -s -X POST http://localhost:8000/api/v1/validate-code -H "X-API-Key: $SECRET" \
+  -H "Content-Type: application/json" -d '{"system": "NAM", "code": "AA-1"}'
+```
+
+Every failure mode returns a real FHIR R4 `OperationOutcome`, not a generic error object: missing key
+(401), wrong scope (403), rate limit exceeded (429, tiered per key type and enforced by counting the
+key's own recent requests &mdash; no new infrastructure). `GET /api/v1/CapabilityStatement` is the one
+open, unauthenticated endpoint, since a client needs to discover what this server supports before it
+has a key at all &mdash; it lists only resources/operations with a real handler behind them.
+
+The **Developer Portal** page (`/developer-portal`) does this end-to-end in the browser: generate a
+key, see the secret exactly once, then call the live `/api/v1` API with it and watch the real response
+(including the real 403 if you pick an endpoint outside the key's scopes).
+
+**A real, previously-invisible bug this surface exposed:** calling the new `/api/v1/terminology/search`
+against ICD-11 is what led to re-testing `/api/search`'s ICD-11 branch directly, which is how the
+FTS5-alias bug (see the Clinical Text Assistant section above) was actually found and fixed. ICD-11
+search had been silently returning zero results everywhere in this codebase before that fix.
 
 ## 🔧 Advanced Usage
 
