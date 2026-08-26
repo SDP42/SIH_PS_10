@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from app import conceptmap, api
+from app import conceptmap, api, ai_router, governance, governance_router, fhir_extra
 import os
+
+governance.ensure_schema()
 
 app = FastAPI(
     title="Ayush ICD-11 Terminology Microservice",
@@ -21,8 +23,15 @@ app.add_middleware(
 )
 
 # Register API routers FIRST so they take priority over static file catch-all
+# fhir_extra registers /ConceptMap/$translate — must be mounted BEFORE
+# conceptmap.router's /ConceptMap/{source_code}, otherwise that path-param
+# route would swallow "$translate" as a literal source_code (first-match-wins
+# routing).
+app.include_router(fhir_extra.router)
 app.include_router(conceptmap.router, tags=["ConceptMap"])
 app.include_router(api.router, prefix="/api", tags=["API"])
+app.include_router(ai_router.router)
+app.include_router(governance_router.router)
 
 # Serve React frontend static files if the dist directory exists
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
