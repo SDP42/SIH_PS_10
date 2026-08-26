@@ -133,6 +133,16 @@ def main():
     print_step(4, "NORMALIZING DATABASE")
     run_step("Normalizing spacing and formatting", normalize_spaces_in_database)
 
+    # Step 4a: Correct TM2 vs Biomedicine target_system labels (data-quality
+    # fix — the 5-pass algorithm above hardcodes 'ICD-11 TM2' regardless of
+    # which ICD-11 chapter the match actually landed in). Never hard-fails.
+    print_step("4a", "CORRECTING TM2 / BIOMEDICINE LABELS")
+    try:
+        from migrate_biomedicine_labels import migrate as migrate_biomedicine_labels
+        migrate_biomedicine_labels()
+    except Exception as e:
+        print(f"⚠️  Skipping TM2/Biomedicine relabeling due to an error: {e}")
+
     # Step 4b: Build AI mapping embeddings (optional — never hard-fails init.py)
     if args.with_embeddings:
         print_step("4b", "BUILDING AI MAPPING EMBEDDINGS (optional)")

@@ -98,3 +98,17 @@ def test_model_info_endpoint():
     assert resp.status_code == 200
     body = resp.json()
     assert body["is_medically_validated"] is False
+
+
+def test_dual_candidates_independent_pools():
+    # SR10 (AAA-2.1) has a curated TM2 mapping (SR10 -> vata pattern) and no
+    # curated Biomedicine mapping — the two pools must stay independent.
+    result = ai_mapping.get_dual_candidates("SR10 (AAA-2.1)")
+    assert result["tm2"]["target_pool"] == "TM2"
+    assert result["biomedicine"]["target_pool"] == "BIOMEDICINE"
+    assert result["tm2"]["has_curated_mapping"] is True
+    assert result["biomedicine"]["has_curated_mapping"] is False
+    for pool in ("tm2", "biomedicine"):
+        assert result[pool]["decision"] in ai_mapping.VALID_DECISIONS
+        for c in result[pool]["candidates"]:
+            assert c["icd11_code"]  # candidates actually resolved to real codes

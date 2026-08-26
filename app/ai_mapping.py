@@ -106,6 +106,40 @@ def _load_index():
     return source_rows, target_rows
 
 
+TARGET_POOL_ALL = "ALL"
+TARGET_POOL_TM2 = "TM2"
+TARGET_POOL_BIOMEDICINE = "BIOMEDICINE"
+
+
+@lru_cache(maxsize=1)
+def _target_pool_mask():
+    """
+    Boolean numpy arrays (aligned with target_rows/target_vectors order)
+    classifying each ICD-11 target concept as TM2 or Biomedicine, from
+    icd11.chapterno — chapter 26 titled "(TM2)" is TM2, chapters 01-25 are
+    Biomedicine. TM1 (chapter 26, not "(TM2)") and extension chapters (V, X)
+    are excluded from both pools (out of scope for AYUSH double-coding).
+    """
+    import numpy as np
+
+    _, target_rows = _load_index()
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT code, chapterno, title FROM icd11")
+    chapter_by_code = {r["code"]: (r["chapterno"], r["title"] or "") for r in cur.fetchall()}
+    conn.close()
+
+    tm2_mask = np.zeros(len(target_rows), dtype=bool)
+    biomed_mask = np.zeros(len(target_rows), dtype=bool)
+    for i, row in enumerate(target_rows):
+        chapterno, title = chapter_by_code.get(row["code"], (None, ""))
+        if chapterno == "26" and "(TM2)" in title:
+            tm2_mask[i] = True
+        elif chapterno is not None and chapterno not in ("26", "V", "X"):
+            biomed_mask[i] = True
+    return tm2_mask, biomed_mask
+
+
 def is_ready() -> bool:
     try:
         _load_matrices()
@@ -142,13 +176,13 @@ def _lexical_overlap(source_text: str, target_text: str) -> float:
     return len(a & b) / len(a | b)
 
 
-def _curated_mappings(namaste_code: str) -> List[Dict[str, Any]]:
+def _curated_mappings(namaste_code: str, target_pool: str = TARGET_POOL_ALL) -> List[Dict[str, Any]]:
     conn = _get_conn()
     cur = conn.cursor()
     normalized = re.sub(r"\s+", " ", namaste_code).strip()
     cur.execute(
         """
-        SELECT cm.target_code, cm.equivalence, i.title AS target_title
+        SELECT cm.target_code, cm.target_system, cm.equivalence, i.title AS target_title
         FROM concept_map cm
         LEFT JOIN icd11 i ON cm.target_code = i.code
         WHERE cm.source_code = ? OR cm.source_code LIKE ? OR cm.source_code LIKE ?
@@ -157,6 +191,11 @@ def _curated_mappings(namaste_code: str) -> List[Dict[str, Any]]:
     )
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
+
+    if target_pool == TARGET_POOL_TM2:
+        rows = [r for r in rows if r["target_system"] == "ICD-11 TM2"]
+    elif target_pool == TARGET_POOL_BIOMEDICINE:
+        rows = [r for r in rows if r["target_system"] == "ICD-11 Biomedicine"]
     return rows
 
 
@@ -171,10 +210,10 @@ def _classify(top1: float, top2: Optional[float]) -> str:
     return DECISION_EXPERT_REVIEW
 
 
-def _rationale(decision: str, candidates: List[Dict[str, Any]], margin: Optional[float]) -> str:
+def _rationale(decision: str, candidates: List[Dict[str, Any]], margin: Optional[float], pool_label: str = "ICD-11") -> str:
     if not candidates:
         return (
-            f"No ICD-11 TM2 candidate scored above the minimum floor ({FLOOR_THRESHOLD}) — "
+            f"No {pool_label} candidate scored above the minimum floor ({FLOOR_THRESHOLD}) — "
             "the engine found nothing worth suggesting rather than forcing a low-quality guess."
         )
     top = candidates[0]
@@ -195,7 +234,10 @@ def _rationale(decision: str, candidates: List[Dict[str, Any]], margin: Optional
     return f"Best candidate '{top['icd11_title']}' scores {top['similarity']:.2f}, below the {FLOOR_THRESHOLD} floor — treated as no validated equivalent."
 
 
-def get_candidates(namaste_code: str, source_system: Optional[str] = None, top_k: int = 5) -> Dict[str, Any]:
+def get_candidates(
+    namaste_code: str, source_system: Optional[str] = None, top_k: int = 5,
+    target_pool: str = TARGET_POOL_ALL,
+) -> Dict[str, Any]:
     import numpy as np
 
     source_vectors, target_vectors, meta = _load_matrices()
@@ -210,8 +252,17 @@ def get_candidates(namaste_code: str, source_system: Optional[str] = None, top_k
     source_vec = source_vectors[source_row["vector_index"]]
     semantic_scores = target_vectors @ source_vec  # cosine similarity, vectors are L2-normalized
 
-    top_pool = min(top_k * 4, len(target_rows))
+    if target_pool != TARGET_POOL_ALL:
+        tm2_mask, biomed_mask = _target_pool_mask()
+        pool_mask = tm2_mask if target_pool == TARGET_POOL_TM2 else biomed_mask
+        semantic_scores = np.where(pool_mask, semantic_scores, -np.inf)
+        eligible_count = int(pool_mask.sum())
+    else:
+        eligible_count = len(target_rows)
+
+    top_pool = min(top_k * 4, eligible_count)
     pool_idx = np.argpartition(-semantic_scores, top_pool - 1)[:top_pool] if top_pool > 0 else np.array([], dtype=int)
+    pool_idx = [i for i in pool_idx if np.isfinite(semantic_scores[i])]
 
     scored = []
     for idx in pool_idx:
@@ -240,19 +291,39 @@ def get_candidates(namaste_code: str, source_system: Optional[str] = None, top_k
     margin = round(top1 - (top2 if top2 is not None else 0.0), 4) if candidates else None
 
     decision = _classify(top1, top2)
-    rationale = _rationale(decision, candidates, margin)
+    pool_label = {"TM2": "ICD-11 TM2", "BIOMEDICINE": "ICD-11 Biomedicine"}.get(target_pool, "ICD-11")
+    rationale = _rationale(decision, candidates, margin, pool_label=pool_label)
 
-    curated = _curated_mappings(source_row["code"])
+    curated = _curated_mappings(source_row["code"], target_pool=target_pool)
 
     return {
         "namaste_code": source_row["code"],
         "source_system": source_row["system"],
+        "target_pool": target_pool,
         "decision": decision,
         "margin": margin,
         "candidates": candidates,
         "rationale": rationale,
         "has_curated_mapping": len(curated) > 0,
         "curated_mappings": curated,
+        "disclaimer": DISCLAIMER,
+    }
+
+
+def get_dual_candidates(namaste_code: str, source_system: Optional[str] = None, top_k: int = 5) -> Dict[str, Any]:
+    """
+    Real double-coding: independent TM2 and Biomedicine suggestions for the
+    same NAMASTE code, each with its own decision tier — a code can be a
+    confident TM2 match while its Biomedicine match is ambiguous, or vice
+    versa, so these are never combined into one score.
+    """
+    tm2 = get_candidates(namaste_code, source_system=source_system, top_k=top_k, target_pool=TARGET_POOL_TM2)
+    biomedicine = get_candidates(namaste_code, source_system=source_system, top_k=top_k, target_pool=TARGET_POOL_BIOMEDICINE)
+    return {
+        "namaste_code": tm2["namaste_code"],
+        "source_system": tm2["source_system"],
+        "tm2": tm2,
+        "biomedicine": biomedicine,
         "disclaimer": DISCLAIMER,
     }
 

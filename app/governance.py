@@ -58,8 +58,36 @@ def ensure_schema():
     if "source" not in existing_cols:
         cur.execute("ALTER TABLE concept_map ADD COLUMN source TEXT DEFAULT 'rule_v1'")
 
+    cur.execute("PRAGMA table_info(review_queue)")
+    rq_cols = {row[1] for row in cur.fetchall()}
+    if "flag_type" not in rq_cols:
+        # 'ai_suggestion' (default, existing rows) vs 'legacy_reclassification'
+        # (see scripts/migrate_biomedicine_labels.py) — items flagged because a
+        # historical concept_map row was found mislabeled TM2/Biomedicine and
+        # needs a human to confirm the underlying match quality, not just the
+        # chapter label.
+        cur.execute("ALTER TABLE review_queue ADD COLUMN flag_type TEXT DEFAULT 'ai_suggestion'")
+    if "concept_map_id" not in rq_cols:
+        cur.execute("ALTER TABLE review_queue ADD COLUMN concept_map_id INTEGER")
+    if "target_system" not in rq_cols:
+        cur.execute("ALTER TABLE review_queue ADD COLUMN target_system TEXT")
+
     conn.commit()
     conn.close()
+
+
+def _target_system_for(cur, target_code: str) -> str:
+    """Classify a target ICD-11 code as TM2 or Biomedicine from its chapter."""
+    cur.execute("SELECT chapterno, title FROM icd11 WHERE code = ? LIMIT 1", (target_code,))
+    row = cur.fetchone()
+    if not row:
+        return "ICD-11 TM2"  # unknown code, keep prior default rather than guess wrong
+    chapterno, title = row["chapterno"], row["title"] or ""
+    if chapterno == "26":
+        # Chapter 26 holds both TM1 (China-origin) and TM2 (India/other-origin,
+        # what this project targets) traditional medicine codes.
+        return "ICD-11 TM2" if "(TM2)" in title else "ICD-11 TM1 (unsupported)"
+    return "ICD-11 Biomedicine"
 
 
 def enqueue_from_suggestion(suggestion: Dict[str, Any]) -> Optional[int]:
@@ -80,11 +108,12 @@ def enqueue_from_suggestion(suggestion: Dict[str, Any]) -> Optional[int]:
         return existing["id"]
 
     top = suggestion["candidates"][0] if suggestion["candidates"] else None
+    target_system = _target_system_for(cur, top["icd11_code"]) if top else None
     cur.execute(
         """
         INSERT INTO review_queue
-            (source_system, source_code, ai_suggested_code, ai_suggested_title, confidence, decision, rationale, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            (source_system, source_code, ai_suggested_code, ai_suggested_title, confidence, decision, rationale, status, created_at, flag_type, target_system)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 'ai_suggestion', ?)
         """,
         (
             suggestion["source_system"],
@@ -95,6 +124,47 @@ def enqueue_from_suggestion(suggestion: Dict[str, Any]) -> Optional[int]:
             suggestion["decision"],
             suggestion.get("rationale"),
             datetime.now(timezone.utc).isoformat(),
+            target_system,
+        ),
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+    return new_id
+
+
+def enqueue_legacy_reclassification(
+    source_system: str, source_code: str, concept_map_id: int,
+    target_code: str, target_title: Optional[str], target_system: str, rationale: str,
+) -> Optional[int]:
+    """
+    Flag an existing (already-inserted) concept_map row whose target_system
+    label was just corrected by scripts/migrate_biomedicine_labels.py, so a
+    human confirms the underlying match quality before it's trusted as a
+    validated Biomedicine mapping. Deduped on (concept_map_id, pending).
+    """
+    conn = _conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT id FROM review_queue WHERE concept_map_id = ? AND status = 'pending'",
+        (concept_map_id,),
+    )
+    existing = cur.fetchone()
+    if existing:
+        conn.close()
+        return existing["id"]
+
+    cur.execute(
+        """
+        INSERT INTO review_queue
+            (source_system, source_code, ai_suggested_code, ai_suggested_title, decision, rationale,
+             status, created_at, flag_type, concept_map_id, target_system)
+        VALUES (?, ?, ?, ?, 'EXPERT_REVIEW', ?, 'pending', ?, 'legacy_reclassification', ?, ?)
+        """,
+        (
+            source_system, source_code, target_code, target_title, rationale,
+            datetime.now(timezone.utc).isoformat(), concept_map_id, target_system,
         ),
     )
     conn.commit()
@@ -143,9 +213,21 @@ def decide(item_id: int, status: str, note: Optional[str] = None) -> Dict[str, A
     )
 
     new_mapping_id = None
-    if status == "approved" and item["ai_suggested_code"]:
+    flag_type = item["flag_type"] if "flag_type" in item.keys() else "ai_suggestion"
+
+    if flag_type == "legacy_reclassification":
+        # The concept_map row already exists (and was already relabeled
+        # TM2/Biomedicine by the migration) — a reviewer here is judging
+        # match *quality*, not creating a new row. Approve = keep it as
+        # curated; reject = the fuzzy match was wrong, remove it.
+        if status == "rejected" and item["concept_map_id"]:
+            cur.execute("DELETE FROM concept_map WHERE id = ?", (item["concept_map_id"],))
+        elif status == "approved":
+            new_mapping_id = item["concept_map_id"]
+    elif status == "approved" and item["ai_suggested_code"]:
         equivalence = "equivalent" if item["decision"] == "AUTO_SUGGEST" else "relatedto"
         normalized_source = re.sub(r"\s+", " ", item["source_code"]).strip()
+        target_system = item["target_system"] or _target_system_for(cur, item["ai_suggested_code"])
 
         cur.execute(
             "SELECT id FROM concept_map WHERE source_code = ? AND target_code = ? AND equivalence = ?",
@@ -155,9 +237,9 @@ def decide(item_id: int, status: str, note: Optional[str] = None) -> Dict[str, A
             cur.execute(
                 """
                 INSERT INTO concept_map (source_system, source_code, target_system, target_code, equivalence, version, source)
-                VALUES (?, ?, 'ICD-11 TM2', ?, ?, 'v1', 'ai_reviewed_v1')
+                VALUES (?, ?, ?, ?, ?, 'v1', 'ai_reviewed_v1')
                 """,
-                (item["source_system"], normalized_source, item["ai_suggested_code"], equivalence),
+                (item["source_system"], normalized_source, target_system, item["ai_suggested_code"], equivalence),
             )
             new_mapping_id = cur.lastrowid
 
