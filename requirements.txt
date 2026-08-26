@@ -9,3 +9,8 @@ python-dotenv>=1.0.0
 python-multipart>=0.0.9
 Jinja2>=3.1.0
 rich>=13.0.0
+
+# AI Mapping Engine (Phase 1) — CPU-only, offline-capable
+sentence-transformers>=3.0.0
+numpy>=1.26.0
+scikit-learn>=1.4.0

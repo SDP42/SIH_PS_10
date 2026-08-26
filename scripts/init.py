@@ -11,6 +11,7 @@ This script performs all necessary initialization steps:
 
 import os
 import sys
+import argparse
 from datetime import datetime
 
 def print_step(step_num, description):
@@ -31,6 +32,17 @@ def run_step(description, func, *args, **kwargs):
 
 def main():
     """Main initialization workflow"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--with-embeddings", dest="with_embeddings", action="store_true", default=True,
+        help="Build AI mapping embeddings after the database is ready (default: on)",
+    )
+    parser.add_argument(
+        "--no-embeddings", dest="with_embeddings", action="store_false",
+        help="Skip the AI mapping embeddings build step",
+    )
+    args = parser.parse_args()
+
     print("🚀 NAMASTE-ICD-11 INTEGRATION SETUP")
     print("=" * 60)
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -120,6 +132,23 @@ def main():
     # Step 4: Normalize database
     print_step(4, "NORMALIZING DATABASE")
     run_step("Normalizing spacing and formatting", normalize_spaces_in_database)
+
+    # Step 4b: Build AI mapping embeddings (optional — never hard-fails init.py)
+    if args.with_embeddings:
+        print_step("4b", "BUILDING AI MAPPING EMBEDDINGS (optional)")
+        try:
+            from build_embeddings import build as build_embeddings
+            print("▶️  Building AI mapping embeddings...")
+            build_embeddings()
+            print("✅ AI mapping embeddings ready")
+        except ImportError as e:
+            print(f"⚠️  Skipping AI mapping embeddings: dependency not installed ({e})")
+            print("    Run: pip install sentence-transformers numpy scikit-learn")
+        except Exception as e:
+            print(f"⚠️  Skipping AI mapping embeddings due to an error: {e}")
+            print("    The rest of the service will still work without it.")
+    else:
+        print_step("4b", "SKIPPING AI MAPPING EMBEDDINGS (--no-embeddings)")
 
     # Step 5: Verify setup
     print_step(5, "VERIFYING SETUP")
