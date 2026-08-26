@@ -18,9 +18,10 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
-from app import ai_mapping
+from app import ai_mapping, audit
+from app.auth import require_demo_auth
 
 DB_PATH = "db/ayush_icd11_combined.db"
 AGENT_NAME = "NAMASTE-ICD11 AI Mapping Engine v0.1"
@@ -137,25 +138,14 @@ def _match_part_for_ai(target_system_label: str, suggestion: Dict[str, Any]) -> 
     }
 
 
-@router.get("/ConceptMap/$translate")
-def translate(
-    system: str = Query(..., description="Source system URI or code (e.g. NAM, NAMASTE)"),
-    code: str = Query(...),
-    target_system: str = Query(
-        "BOTH", description="ICD11-TM2 | ICD11-BIOMEDICINE | BOTH (default) — real double-coding when BOTH"
-    ),
-):
+def dual_translate_match_parts(normalized_code: str, requested_systems: List[str], source_system: str = ""):
     """
-    FHIR R4 ConceptMap $translate — real double-coding: by default returns
-    one match group for TM2 and one for Biomedicine, each independently
-    curated-first / AI-fallback. NO_VALIDATED_EQUIVALENT for a given system
-    returns equivalence:"unmatched" for that system's match group explicitly,
-    never silently omitted — even if the *other* system did match.
+    Core double-coding logic, reused by both GET /ConceptMap/$translate and
+    POST /Bundle: curated-first per requested target system, AI dual-pool
+    fallback otherwise. Returns (match_parts, source_unknown_message) — the
+    latter is set (and match_parts left empty) when the source code itself
+    isn't recognized at all, regardless of target system.
     """
-    source_system = _resolve_system(system)
-    normalized_code = re.sub(r"\s+", " ", code).strip()
-    requested_systems = _TARGET_SYSTEM_ALIASES.get(target_system.upper(), _TARGET_SYSTEM_ALIASES["BOTH"])
-
     conn = _conn()
     cur = conn.cursor()
     curated_rows = _curated_rows_for(cur, normalized_code, requested_systems)
@@ -181,9 +171,33 @@ def translate(
             })
             continue
         except ai_mapping.SourceConceptNotFoundError:
-            source_unknown_message = f"Unknown source code {source_system}/{normalized_code}"
+            source_unknown_message = f"Unknown source code {source_system}/{normalized_code}".strip()
             break
         match_parts.append(_match_part_for_ai(system_label, suggestion))
+
+    return match_parts, source_unknown_message
+
+
+@router.get("/ConceptMap/$translate")
+def translate(
+    system: str = Query(..., description="Source system URI or code (e.g. NAM, NAMASTE)"),
+    code: str = Query(...),
+    target_system: str = Query(
+        "BOTH", description="ICD11-TM2 | ICD11-BIOMEDICINE | BOTH (default) — real double-coding when BOTH"
+    ),
+):
+    """
+    FHIR R4 ConceptMap $translate — real double-coding: by default returns
+    one match group for TM2 and one for Biomedicine, each independently
+    curated-first / AI-fallback. NO_VALIDATED_EQUIVALENT for a given system
+    returns equivalence:"unmatched" for that system's match group explicitly,
+    never silently omitted — even if the *other* system did match.
+    """
+    source_system = _resolve_system(system)
+    normalized_code = re.sub(r"\s+", " ", code).strip()
+    requested_systems = _TARGET_SYSTEM_ALIASES.get(target_system.upper(), _TARGET_SYSTEM_ALIASES["BOTH"])
+
+    match_parts, source_unknown_message = dual_translate_match_parts(normalized_code, requested_systems, source_system)
 
     if source_unknown_message and not match_parts:
         return {
@@ -324,3 +338,91 @@ def expand_valueset(
             "contains": contains[:count],
         },
     }
+
+
+_NAMASTE_SYSTEM_URIS = {SYSTEM_URIS[k] for k in ("NAM", "NSM", "NUM", "AST", "NAMASTE")}
+MAPPING_EQUIVALENCE_EXT_URL = "http://namaste.terminology/fhir/StructureDefinition/mapping-equivalence"
+
+
+def _extract_namaste_coding(condition: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    codings = ((condition.get("code") or {}).get("coding")) or []
+    for c in codings:
+        if c.get("system") in _NAMASTE_SYSTEM_URIS:
+            return c
+    return codings[0] if codings else None
+
+
+@router.post("/Bundle")
+def upload_bundle(body: Dict[str, Any] = Body(...), identity: Dict[str, Any] = Depends(require_demo_auth)):
+    """
+    Secure* FHIR Bundle upload for double-coding: accepts a Bundle containing
+    one or more Condition resources with a NAMASTE coding, resolves each
+    independently against TM2 AND Biomedicine (curated-first, AI-fallback —
+    same logic as $translate), and returns the Bundle with
+    Condition.code.coding[] enriched with both codes plus inline Provenance
+    entries for any AI-sourced addition.
+
+    *"Secure": gated behind demo-mode ABHA auth (app/auth.py) — see that
+    module's docstring for exactly what "secure" does and doesn't mean here.
+    """
+    if body.get("resourceType") != "Bundle":
+        raise HTTPException(status_code=400, detail={"error": "NOT_A_BUNDLE", "message": "resourceType must be 'Bundle'"})
+
+    entries = body.get("entry") or []
+    provenance_entries = []
+    conditions_processed = 0
+
+    for entry in entries:
+        resource = entry.get("resource") or {}
+        if resource.get("resourceType") != "Condition":
+            continue
+
+        coding = _extract_namaste_coding(resource)
+        if not coding or not coding.get("code"):
+            continue
+
+        normalized_code = re.sub(r"\s+", " ", coding["code"]).strip()
+        match_parts, unknown_message = dual_translate_match_parts(
+            normalized_code, ["ICD-11 TM2", "ICD-11 Biomedicine"]
+        )
+        conditions_processed += 1
+
+        existing_codings = resource.setdefault("code", {}).setdefault("coding", [])
+        for part in match_parts:
+            fields = {p["name"]: p for p in part["part"]}
+            equivalence = fields["equivalence"]["valueCode"]
+            if equivalence == "unmatched":
+                continue
+            concept = dict(fields["concept"]["valueCoding"])
+            concept["extension"] = [{"url": MAPPING_EQUIVALENCE_EXT_URL, "valueCode": equivalence}]
+            existing_codings.append(concept)
+
+            if "provenance" in fields:
+                prov = dict(fields["provenance"]["resource"])
+                prov["target"] = [{"reference": f"Condition/{resource.get('id', 'unknown')}"}]
+                provenance_entries.append({"resource": prov})
+
+        if unknown_message:
+            resource.setdefault("extension", []).append(
+                {"url": "http://namaste.terminology/fhir/StructureDefinition/translate-note", "valueString": unknown_message}
+            )
+
+    if conditions_processed == 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "NO_NAMASTE_CONDITION",
+                "message": "Bundle must contain at least one Condition resource with a NAMASTE coding.",
+            },
+        )
+
+    body["entry"] = entries + provenance_entries
+    body.setdefault("meta", {})["lastUpdated"] = _now_iso()
+
+    audit.log(
+        action="BUNDLE_UPLOAD",
+        actor=f"{identity.get('name')} ({identity.get('role')})",
+        target=f"Bundle ({conditions_processed} Condition(s) double-coded)",
+        details=f"{len(provenance_entries)} AI-sourced Provenance entr{'y' if len(provenance_entries) == 1 else 'ies'} added",
+    )
+    return body

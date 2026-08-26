@@ -2,10 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from app import conceptmap, api, ai_router, governance, governance_router, fhir_extra
+from app import conceptmap, api, ai_router, governance, governance_router, fhir_extra, auth, audit
 import os
 
 governance.ensure_schema()
+audit.ensure_schema()
 
 app = FastAPI(
     title="Ayush ICD-11 Terminology Microservice",
@@ -32,6 +33,8 @@ app.include_router(conceptmap.router, tags=["ConceptMap"])
 app.include_router(api.router, prefix="/api", tags=["API"])
 app.include_router(ai_router.router)
 app.include_router(governance_router.router)
+app.include_router(auth.router)
+app.include_router(audit.router)
 
 # Serve React frontend static files if the dist directory exists
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")

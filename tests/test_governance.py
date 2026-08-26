@@ -97,11 +97,16 @@ def test_queue_endpoint():
     assert "items" in body and "total" in body
 
 
-def test_decide_endpoint_invalid_status():
-    resp = client.post("/api/governance/999999/decide", json={"status": "bogus"})
+def test_decide_endpoint_requires_auth():
+    resp = client.post("/api/governance/999999/decide", json={"status": "approved"})
+    assert resp.status_code == 401
+
+
+def test_decide_endpoint_invalid_status(demo_auth_headers):
+    resp = client.post("/api/governance/999999/decide", json={"status": "bogus"}, headers=demo_auth_headers)
     assert resp.status_code == 400
 
 
-def test_decide_endpoint_not_found():
-    resp = client.post("/api/governance/999999/decide", json={"status": "approved"})
+def test_decide_endpoint_not_found(demo_auth_headers):
+    resp = client.post("/api/governance/999999/decide", json={"status": "approved"}, headers=demo_auth_headers)
     assert resp.status_code == 404

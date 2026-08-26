@@ -106,6 +106,43 @@ def test_code_system_icd11_split_tm2_biomedicine():
     assert biomedicine["count"] > tm2["count"]
 
 
+def test_bundle_upload_requires_auth():
+    resp = client.post("/Bundle", json={"resourceType": "Bundle", "type": "transaction", "entry": []})
+    assert resp.status_code == 401
+
+
+def test_bundle_upload_enriches_condition_with_dual_coding(demo_auth_headers):
+    code = _find_curated_pair()
+    bundle = {
+        "resourceType": "Bundle",
+        "type": "transaction",
+        "entry": [
+            {"resource": {
+                "resourceType": "Condition",
+                "id": "cond-1",
+                "code": {"coding": [{"system": "http://namaste.terminology/CodeSystem/ayurveda-morbidity", "code": code}]},
+            }}
+        ],
+    }
+    resp = client.post("/Bundle", json=bundle, headers=demo_auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    codings = body["entry"][0]["resource"]["code"]["coding"]
+    # original NAMASTE coding plus at least one ICD-11 coding appended
+    assert len(codings) >= 2
+    assert codings[0]["code"] == code
+
+
+def test_bundle_upload_rejects_non_bundle(demo_auth_headers):
+    resp = client.post("/Bundle", json={"resourceType": "Condition"}, headers=demo_auth_headers)
+    assert resp.status_code == 400
+
+
+def test_bundle_upload_rejects_no_condition(demo_auth_headers):
+    resp = client.post("/Bundle", json={"resourceType": "Bundle", "type": "transaction", "entry": []}, headers=demo_auth_headers)
+    assert resp.status_code == 400
+
+
 def test_valueset_expand():
     resp = client.get("/ValueSet/$expand", params={"filter": "fever", "system": "icd11", "count": 5})
     assert resp.status_code == 200
