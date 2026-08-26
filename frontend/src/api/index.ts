@@ -424,3 +424,55 @@ export const runWhoReleaseSync = (body: { release?: string } = {}) =>
 /** ICD-API sweep — needs ICD_API_CLIENT_ID/SECRET server-side; adds definitions + browser links. */
 export const runWhoApiSync = (body: { limit?: number; release?: string } = {}) =>
   apiClient.post<WhoSyncResult>('/api/who/sync/api', body).then((r) => r.data);
+
+// ---- Governance & interoperability analytics ----
+
+export interface TraditionCoverage {
+  system: string;
+  label: string;
+  corpus_size: number;
+  unmapped: number | null;
+  mapped: number | null;
+  coverage_pct: number | null;
+}
+
+export interface MappingRegistryStats {
+  total_mappings: number;
+  equivalent: number;
+  related: number;
+  curated_rule_based: number;
+  ai_reviewed: number;
+  target_tm2: number;
+  target_biomedicine: number;
+}
+
+export interface ReviewQueueStats {
+  pending: number;
+  approved: number;
+  rejected: number;
+  needs_info: number;
+  by_decision_tier: Record<string, number>;
+  ai_suggestions: number;
+  legacy_reclassifications: number;
+  avg_review_turnaround_hours: number | null;
+}
+
+export interface AnalyticsOverview {
+  generated_at: string;
+  traditions: TraditionCoverage[];
+  mapping_registry: MappingRegistryStats;
+  review_queue: ReviewQueueStats;
+  who_sync: {
+    mode: string;
+    snapshot_release: string;
+    open_drift_items: number;
+    release_sync_coverage_pct: number;
+    last_release_sync: { run_at: string; mode: string; codes_checked: number } | null;
+  };
+  audit_activity: Array<{ day: string; n: number }>;
+  audit_action_breakdown: Array<{ action: string; n: number }>;
+  data_honesty_note: string;
+}
+
+export const getAnalyticsOverview = () =>
+  apiClient.get<AnalyticsOverview>('/api/analytics/overview').then((r) => r.data);

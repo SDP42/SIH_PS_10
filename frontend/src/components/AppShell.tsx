@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Search, GitMerge, Activity,
-  Settings, Leaf, Sparkles, ClipboardCheck, LogOut, Globe
+  Settings, Leaf, Sparkles, ClipboardCheck, LogOut, Globe, BarChart3
 } from 'lucide-react';
 import { getStats } from '../api';
 import { useDemoAuth } from '../auth/DemoAuthContext';
@@ -15,6 +15,7 @@ const NAV = [
   { to: '/review-queue', icon: ClipboardCheck, label: 'Expert Review' },
   { to: '/fhir', icon: Activity, label: 'FHIR Workspace' },
   { to: '/who-sync', icon: Globe, label: 'WHO Sync' },
+  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

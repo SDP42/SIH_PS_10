@@ -34,8 +34,9 @@ import app.governance as _governance
 import app.fhir_extra as _fhir_extra
 import app.audit as _audit
 import app.who_sync as _who_sync
+import app.analytics as _analytics
 
-for _mod in (_api, _conceptmap, _ai_mapping, _governance, _fhir_extra, _audit, _who_sync):
+for _mod in (_api, _conceptmap, _ai_mapping, _governance, _fhir_extra, _audit, _who_sync, _analytics):
     _mod.DB_PATH = TEST_DB_PATH
 
 _governance.ensure_schema()
