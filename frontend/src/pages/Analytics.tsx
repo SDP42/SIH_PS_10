@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, ShieldCheck, ClipboardList, Globe, Activity, Info } from 'lucide-react';
-import { getAnalyticsOverview, type TraditionCoverage } from '../api';
+import { useState } from 'react';
+import { BarChart3, ShieldCheck, ClipboardList, Globe, Activity, Info, Link2, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { getAnalyticsOverview, verifyAuditChain, type TraditionCoverage, type AuditVerifyResult } from '../api';
 import { useLanguage } from '../i18n/LanguageContext';
 
 function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
@@ -49,6 +50,40 @@ function TraditionRow({ t }: { t: TraditionCoverage }) {
         <CoverageBar pct={t.coverage_pct} tone={toneFor(t.coverage_pct)} />
       </td>
     </tr>
+  );
+}
+
+function AuditIntegrityChip() {
+  const [result, setResult] = useState<AuditVerifyResult | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  async function check() {
+    setChecking(true);
+    try {
+      setResult(await verifyAuditChain());
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  if (!result) {
+    return (
+      <button className="btn btn-ghost btn-sm" disabled={checking} onClick={check} title="Walks the tamper-evident audit hash chain and confirms it has not been altered">
+        <Link2 size={13} /> {checking ? 'Verifying…' : 'Verify audit integrity'}
+      </button>
+    );
+  }
+
+  return result.valid ? (
+    <span className="badge badge-equivalent" title={`${result.rows_checked} rows checked, hash chain intact`}>
+      <CheckCircle2 size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
+      Audit chain verified ({result.rows_checked} rows)
+    </span>
+  ) : (
+    <span className="badge badge-danger" title={result.reason || undefined}>
+      <ShieldAlert size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
+      TAMPERED — broken at row #{result.broken_at_id}
+    </span>
   );
 }
 
@@ -226,6 +261,7 @@ export default function Analytics() {
             </div>
             <div className="section-subtitle">Real audit-log volume — every bar is an actual recorded action.</div>
           </div>
+          <AuditIntegrityChip />
         </div>
 
         {data.audit_activity.length ? (

@@ -97,6 +97,7 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | 🔑 **API Key Developer Platform** | Real key issuance, scopes, rate limiting, rotation/revocation, and a versioned `/api/v1` surface an EMR could actually integrate against |
 | 🧪 **Population Health Demo** | 2,200 synthetic patients across gender/region/time, structurally isolated from — and never mixed into — the real governance analytics |
 | 🔀 **Terminology What-If Simulator** | Diffs any two real WHO ICD-11 releases and reports exactly which curated mappings would break or go ambiguous — before the release ships |
+| ⛓️ **Tamper-Evident Audit Ledger** | Hash-chains the real audit trail — editing any row directly in the database is caught, and the exact row is named |
 
 ---
 
@@ -926,6 +927,35 @@ duplicate review-queue rows.
 The **What-If Simulator** page (`/what-if-simulator`) does this end-to-end: pick two real WHO releases
 from a live dropdown, run the diff, see the risk score and affected-mappings table, escalate to the
 real expert review queue with one click.
+
+## ⛓️ Tamper-Evident Audit Ledger (Phase 3B)
+
+The real audit trail (`app/audit.py` — already written to by every governance decision, WHO sync, API
+key action, Bundle upload, and terminology simulation) now hash-chains its own rows: each row's
+`row_hash` is `SHA-256(prev_hash + this row's own content)`. This is a hash chain &mdash; the same core
+idea behind a git commit history or a blockchain's block-linking, applied to one local table &mdash; not
+a distributed ledger, not a cryptographic signature scheme, and not a claim of any kind of
+certification. It proves *"this history has not been altered since it was written,"* nothing more.
+
+```bash
+curl -s http://localhost:8000/api/audit/verify | python3 -m json.tool
+```
+
+**Live-verified this session, by actually attacking it:** wrote a real governance event, then edited
+that row's `details` field directly in the SQLite database &mdash; bypassing the API entirely, exactly
+the way an attacker with raw DB access would. `GET /api/audit/verify` immediately reported
+`"valid": false"` and named the exact tampered row id. A second test confirmed the same for a tampered
+`actor` field, and a third confirmed that deleting a row breaks the chain at the very next row.
+
+`log()` keeps its exact original function signature &mdash; every existing call site across
+`governance_router.py`, `who_router.py`, `apikey_router.py`, `terminology_simulator_router.py`, and
+`fhir_extra.py`'s Bundle upload needed zero changes for the chain to apply to their writes.
+`ensure_schema()` automatically backfills any pre-existing rows into the chain the first time it runs.
+
+The Analytics page carries a **"Verify audit integrity"** chip (Governance Activity card) that calls
+this endpoint live and shows either a green "Audit chain verified (N rows)" badge or a red
+"TAMPERED — broken at row #N" badge &mdash; the single most effective thing to do live in front of
+judges: hand-edit one row in a DB browser, then click the chip and watch it get caught.
 
 ## 🔧 Advanced Usage
 

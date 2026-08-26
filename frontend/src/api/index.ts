@@ -644,3 +644,16 @@ export const escalateSimulation = (simId: number) =>
 
 export const getSimulationHistory = () =>
   apiClient.get<{ simulations: SimulationResult[] }>('/api/v1/terminology/simulations').then((r) => r.data);
+
+// ---- Tamper-evident audit chain (Phase 3B) ----
+
+export interface AuditVerifyResult {
+  valid: boolean;
+  broken_at_id: number | null;
+  reason: string | null;
+  rows_checked: number;
+  total_rows: number;
+}
+
+export const verifyAuditChain = () =>
+  apiClient.get<AuditVerifyResult>('/api/audit/verify').then((r) => r.data);
