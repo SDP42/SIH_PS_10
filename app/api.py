@@ -7,7 +7,22 @@ from typing import Optional
 import sqlite3
 import re
 
+from app import ai_mapping
+
 DB_PATH = "db/ayush_icd11_combined.db"
+
+
+def _real_confidence(source_code: str, target_code: str) -> Optional[float]:
+    """
+    Backend-computed confidence for a curated mapping: real embedding cosine
+    similarity + lexical overlap between the actual source and target concept
+    text (same model/formula as the AI suggestion engine — see
+    app/ai_mapping.py:score_pair), not a hardcoded per-equivalence constant.
+    Returns None (never a fake number) if the AI embeddings haven't been
+    built or either code isn't in the precomputed index.
+    """
+    result = ai_mapping.score_pair(source_code, target_code)
+    return result["combined_score"] if result else None
 
 router = APIRouter()
 
@@ -381,8 +396,10 @@ def get_mappings(
             "target_code": r["target_code"],
             "target_display": r["target_display"] or r["target_code"],
             "equivalence": r["equivalence"],
-            # Confidence is derived from equivalence type
-            "confidence": 0.98 if r["equivalence"] == "equivalent" else 0.72,
+            # Real backend-computed confidence (embedding similarity + lexical
+            # overlap), not a hardcoded per-equivalence constant. None means
+            # the AI embeddings haven't been built — never faked.
+            "confidence": _real_confidence(r["source_code"], r["target_code"]),
         }
         for r in rows
     ]
@@ -445,7 +462,7 @@ def get_mapping_by_id(mapping_id: int):
         "target_code": row["target_code"],
         "target_display": row["target_display"] or row["target_code"],
         "equivalence": row["equivalence"],
-        "confidence": 0.98 if row["equivalence"] == "equivalent" else 0.72,
+        "confidence": _real_confidence(row["source_code"], row["target_code"]),
         "status": "validated" if row["equivalence"] == "equivalent" else "review",
         "version": "1.0.0",
     }

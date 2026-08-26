@@ -294,11 +294,12 @@ class TestMappings:
                 assert field in m, f"Mapping missing field: {field}"
 
     def test_mappings_confidence_range(self):
-        """Confidence must be between 0 and 1."""
+        """Confidence must be None (embeddings unavailable) or between 0 and 1 — never out of range."""
         data = client.get("/api/mappings", params={"page_size": 20}).json()
         for m in data["results"]:
-            assert 0.0 <= m["confidence"] <= 1.0, \
-                f"Confidence out of range: {m['confidence']}"
+            if m["confidence"] is not None:
+                assert 0.0 <= m["confidence"] <= 1.0, \
+                    f"Confidence out of range: {m['confidence']}"
 
     def test_mappings_equivalence_values(self):
         """Only 'equivalent' and 'relatedto' should appear."""
@@ -403,23 +404,30 @@ class TestMappingDetail:
     def test_mapping_detail_confidence_in_range(self):
         mid = get_first_mapping_id()
         data = client.get(f"/api/mappings/{mid}").json()
+        # None is a valid, honest answer when the AI embeddings aren't built —
+        # never a fake fallback number — but this environment has them built.
+        assert data["confidence"] is not None, "AI embeddings not built — run scripts/build_embeddings.py"
         assert 0.0 <= data["confidence"] <= 1.0
 
-    def test_mapping_detail_equivalent_has_high_confidence(self):
-        """Equivalent mappings must have confidence 0.98."""
-        data = client.get("/api/mappings", params={"equivalence": "equivalent", "page_size": 1}).json()
-        if data["results"]:
-            mid = data["results"][0]["id"]
-            detail = client.get(f"/api/mappings/{mid}").json()
-            assert detail["confidence"] == 0.98
+    def test_mapping_detail_confidence_is_backend_computed_not_a_constant(self):
+        """
+        Confidence must be real, per-pair embedding similarity, not the old
+        hardcoded 0.98-for-equivalent / 0.72-for-relatedto constants — assert
+        real variance across distinct equivalent mappings.
+        """
+        data = client.get("/api/mappings", params={"equivalence": "equivalent", "page_size": 15}).json()
+        confidences = {m["confidence"] for m in data["results"] if m["confidence"] is not None}
+        assert len(confidences) > 1, "All confidences identical — looks like a hardcoded constant, not a real score"
+        assert confidences != {0.98}, "Confidence is still the old hardcoded constant"
 
-    def test_mapping_detail_relatedto_has_lower_confidence(self):
-        """Related-to mappings must have confidence 0.72."""
-        data = client.get("/api/mappings", params={"equivalence": "relatedto", "page_size": 1}).json()
-        if data["results"]:
-            mid = data["results"][0]["id"]
-            detail = client.get(f"/api/mappings/{mid}").json()
-            assert detail["confidence"] == 0.72
+    def test_mapping_detail_confidence_matches_ai_engine_score_pair(self):
+        """The API's confidence must equal app.ai_mapping.score_pair's combined_score for the same pair."""
+        from app import ai_mapping
+        mid = get_first_mapping_id()
+        detail = client.get(f"/api/mappings/{mid}").json()
+        expected = ai_mapping.score_pair(detail["source_code"], detail["target_code"])
+        assert expected is not None
+        assert detail["confidence"] == expected["combined_score"]
 
 
 # ─────────────────────────────────────────────

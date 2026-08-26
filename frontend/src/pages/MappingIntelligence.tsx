@@ -3,12 +3,20 @@ import { useQuery } from '@tanstack/react-query';
 import { getMappings, getMappingById, type Mapping, type MappingDetail } from '../api';
 import { GitMerge, Search, X, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 
-function ConfBar({ value }: { value: number }) {
+function ConfBar({ value }: { value: number | null }) {
+  if (value === null) {
+    return (
+      <div className="confidence-bar">
+        <div className="confidence-track" />
+        <span className="confidence-pct" title="AI embeddings not built — run scripts/build_embeddings.py">—</span>
+      </div>
+    );
+  }
   const pct = Math.round(value * 100);
   const cls = pct >= 90 ? 'high' : pct >= 70 ? '' : 'medium';
   return (
     <div className="confidence-bar">
-      <div className="confidence-track"><div className="confidence-fill" style={{ width: `${pct}%` }} /></div>
+      <div className="confidence-track"><div className={`confidence-fill ${cls}`} style={{ width: `${pct}%` }} /></div>
       <span className="confidence-pct">{pct}%</span>
     </div>
   );

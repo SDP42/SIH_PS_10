@@ -60,7 +60,10 @@ export interface Mapping {
   target_code: string;
   target_display: string;
   equivalence: string;
-  confidence: number;
+  // Real backend-computed embedding similarity + lexical overlap (see
+  // app/ai_mapping.py:score_pair) — null only when the AI embeddings
+  // haven't been built, never a fake fallback number.
+  confidence: number | null;
 }
 
 export interface MappingDetail extends Mapping {

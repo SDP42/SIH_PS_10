@@ -164,6 +164,53 @@ def _find_source_row(namaste_code: str, source_system: Optional[str] = None) -> 
     return matches[0] if matches else None
 
 
+@lru_cache(maxsize=1)
+def _source_code_index() -> Dict[str, int]:
+    """code -> row index in source_rows/source_vectors, for O(1) pair-scoring lookups."""
+    source_rows, _ = _load_index()
+    return {r["code"]: i for i, r in enumerate(source_rows)}
+
+
+@lru_cache(maxsize=1)
+def _target_code_index() -> Dict[str, int]:
+    """code -> row index in target_rows/target_vectors, for O(1) pair-scoring lookups."""
+    _, target_rows = _load_index()
+    return {r["code"]: i for i, r in enumerate(target_rows)}
+
+
+def score_pair(source_code: str, target_code: str) -> Optional[Dict[str, Any]]:
+    """
+    Real, backend-computed confidence for an already-known (source, target)
+    pair — e.g. a curated concept_map row — using the same trusted embedding
+    model and scoring formula as the AI suggestion engine (see get_candidates),
+    instead of a hardcoded constant. Returns None if either code isn't in the
+    precomputed embedding index (embeddings not built, or an edge-case code
+    format) — callers must treat that as "confidence unavailable", never
+    silently fall back to a fake number.
+    """
+    try:
+        source_vectors, target_vectors, _ = _load_matrices()
+    except EngineNotReadyError:
+        return None
+
+    normalized_source = re.sub(r"\s+", " ", source_code).strip()
+    src_idx = _source_code_index().get(normalized_source)
+    tgt_idx = _target_code_index().get(target_code.strip())
+    if src_idx is None or tgt_idx is None:
+        return None
+
+    source_rows, target_rows = _load_index()
+    source_text = source_rows[src_idx]["display_text"] or ""
+    target_text = target_rows[tgt_idx]["display_text"] or ""
+
+    sem = float(source_vectors[src_idx] @ target_vectors[tgt_idx])
+    sem = max(0.0, min(1.0, sem))  # guard against near-zero negative cosine noise
+    lex = _lexical_overlap(source_text, target_text)
+    combined = max(0.0, min(1.0, SEMANTIC_WEIGHT * sem + LEXICAL_WEIGHT * lex))
+
+    return {"semantic_score": round(sem, 4), "lexical_score": round(lex, 4), "combined_score": round(combined, 4)}
+
+
 def _tokenize(text: str) -> set:
     words = re.findall(r"[a-zA-Z]{4,}", text.lower())
     return {w for w in words if w not in _STOPWORDS}
