@@ -267,7 +267,8 @@ npm install
 npm run dev
 ```
 
-> 🖥️ **Dashboard:** http://localhost:5173
+> 🖥️ **Dashboard:** http://localhost:5173 — you'll land on an **ABHA Demo Mode** login screen first;
+> enter any name/role to continue (no password, no real ABHA — see "AI / Governance Layer" below).
 
 ### Production (Unified Serving)
 
@@ -527,55 +528,99 @@ one of four **transparent decisions** — named threshold constants, never a sil
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/ai/suggest/{code}` | Ranked candidates + decision + rationale for one code |
+| `GET` | `/api/ai/suggest/{code}` | Ranked TM2+Biomedicine-mixed candidates + decision + rationale |
+| `GET` | `/api/ai/suggest/{code}/dual` | **Real double-coding**: independent TM2 and Biomedicine decisions for the same code |
 | `GET` | `/api/ai/unmapped` | Paginated NAMASTE-family codes with no curated mapping |
 | `POST` | `/api/ai/batch_suggest` | Suggestions for a code list, or `{"all_unmapped": true, "limit": 50}` |
 | `GET` | `/api/ai/model-info` | Embedding model + build metadata |
 
-### FHIR completeness
+### ICD-11 Biomedicine dual-coding — a real bug found and fixed
+
+A direct DB audit found the `icd11` table already contains the full WHO ICD-11 Biomedicine
+linearization (36,782 rows: chapters 01–25 are Biomedicine, ~35,536 concepts; chapter 26 is
+Traditional Medicine, ~1,246 concepts) — it was simply never distinguished from TM2. Worse,
+`concept_map.target_system` was hardcoded `'ICD-11 TM2'` for **all** 468 curated rows regardless
+of which chapter the target actually fell in; **248 of them actually targeted Biomedicine
+codes**, mislabeled.
+
+`scripts/migrate_biomedicine_labels.py` (idempotent, run automatically by `scripts/init.py` step
+4a) corrects every row's label from the objective fact of chapter membership, then routes every
+row newly relabeled to Biomedicine into the governance `review_queue`
+(`flag_type="legacy_reclassification"`) so a human confirms the underlying fuzzy-matched pairing
+is actually correct before it's trusted — the mislabeling became a governance demo, not a silent
+fix. `app/ai_mapping.py`'s `get_dual_candidates()` runs the AI engine against the TM2 and
+Biomedicine chapter pools independently, each with its own decision tier.
+
+### FHIR completeness — real double-coding
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/ConceptMap/$translate?system=&code=` | Curated-first, AI-fallback; `result:false`/`equivalence:"unmatched"` when nothing validates |
-| `GET` | `/CodeSystem/{NAM\|NSM\|NUM\|AST\|ICD11}` | `content:"not-present"` + a real live count |
+| `GET` | `/ConceptMap/$translate?system=&code=&target_system=BOTH\|ICD11-TM2\|ICD11-BIOMEDICINE` | Default `BOTH` returns one match group per system, each curated-first/AI-fallback; `unmatched` per-system when nothing validates, never silently dropped |
+| `POST` | `/Bundle` | **Auth-gated.** Accepts a Bundle with a NAMASTE-coded Condition, returns it enriched with real dual TM2+Biomedicine codes + inline `Provenance` |
+| `POST` | `/api/problem-list/build` | Builds a FHIR `Condition` (`category=problem-list-item`) with dual coding from one NAMASTE code |
+| `GET` | `/CodeSystem/{NAM\|NSM\|NUM\|AST\|ICD11-TM2\|ICD11-BIOMEDICINE}` | `content:"not-present"` + a real, chapter-filtered live count |
 | `GET` | `/ValueSet/$expand?filter=&system=` | Real FTS5 search wrapped in FHIR `expansion.contains` |
+| `GET` | `/Consent/{id}` | **Stub only** — one static, correctly-shaped Consent resource; no real consent is collected |
 
-AI-sourced `$translate` results carry an inline FHIR `Provenance` resource (agent, decision,
-confidence) as a `provenance` parameter.
+AI-sourced `$translate`/Bundle results carry an inline FHIR `Provenance` resource (agent, decision,
+confidence).
 
 ### Human-in-the-loop governance
 
-`NEEDS_CONTEXT`/`EXPERT_REVIEW` suggestions auto-enqueue into a `review_queue` table. A reviewer
-decision of `approved` writes a **new** row into the existing `concept_map` table
-(`source="ai_reviewed_v1"`, vs `"rule_v1"` for the original 468) — an approved AI suggestion
-becomes a first-class curated mapping without ever mutating history.
+`NEEDS_CONTEXT`/`EXPERT_REVIEW` suggestions (and the 248 legacy Biomedicine reclassifications
+above) auto-enqueue into `review_queue`. A reviewer decision of `approved` on an AI suggestion
+writes a **new** row into `concept_map` (`source="ai_reviewed_v1"`, vs `"rule_v1"` for the
+original 468); on a legacy item, approve keeps the (already-relabeled) row, **reject deletes it**
+— a reviewer can actually remove a bad legacy mapping from the registry.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/governance/queue?status=` | Paginated, filterable review queue |
-| `POST` | `/api/governance/{id}/decide` | `{status, note}` — `approved` writes a new `concept_map` row |
+| `GET` | `/api/governance/queue?status=` | Paginated, filterable review queue (filterable client-side by `flag_type` too) |
+| `POST` | `/api/governance/{id}/decide` | **Auth-gated.** `{status, note}` — `approved` writes/keeps a `concept_map` row, `rejected` on a legacy item deletes it |
+
+### ABHA Demo Mode auth + real audit trail
+
+`app/auth.py` issues a signed (HMAC-SHA256), short-lived bearer token via `POST
+/api/auth/demo-login` (name + role, no password) — **not real ABHA OAuth2**, but a real FastAPI
+dependency (`require_demo_auth`) that 401s without a valid token, gating `POST /Bundle` and
+`POST /api/governance/{id}/decide`. Every response is labeled `"mode": "ABHA_DEMO"`.
+
+`app/audit.py`'s `audit_log` table records every governance decision and Bundle upload with the
+real actor identity from the token; `GET /api/audit/recent` backs Overview's activity timeline.
 
 ### Frontend
 
-Two new pages: **AI Mapping Lab** (`/ai-lab`) — search any code, see the decision + ranked
-candidates + rationale, run the AI over the next 50 unmapped codes — and **Expert Review**
-(`/review-queue`) — approve/reject queue items and watch the registry grow. **FHIR Workspace**
-gained a live `$translate` tester tab. **Overview** now shows live unmapped-gap and review-queue
-counts alongside the original `/api/stats` cards.
+The app now sits behind a login screen (`/login`, ABHA Demo Mode) before any page is reachable.
+**AI Mapping Lab** (`/ai-lab`) shows independent TM2/Biomedicine suggestion cards side by side, plus
+the batch-run tool. **Expert Review** (`/review-queue`) tags rows AI Suggestion vs Legacy
+Reclassification with a filter, and approve/reject really writes/deletes registry rows. **FHIR
+Workspace** gained `$translate` (now dual-coded by default), **Bundle Upload (Double-Coding)**, and
+**Problem List Builder** tabs, all hitting live endpoints. **Overview**'s activity timeline is the
+real audit trail, not a hardcoded array; **AppShell** shows the real logged-in identity and a real
+backend-liveness ping instead of a static "Operational" dot.
 
 ### What's real vs. demo-mode
 
 **Real** (live computation, covered by `pytest`, no mocked data):
-- All of Phase 1–4 above: embeddings, hybrid scoring, decision tiering, the governance
-  approve→registry write path, and the new FHIR operations.
-- The original 468 curated mappings and 5-pass algorithm (unchanged).
+- Embeddings, hybrid scoring, decision tiering (single-pool and dual TM2+Biomedicine).
+- The governance approve→registry write path, including deleting a rejected legacy mapping.
+- `$translate`, `CodeSystem` (split TM2/Biomedicine), `ValueSet/$expand`, `POST /Bundle`,
+  `POST /api/problem-list/build` — real double-coding throughout.
+- ABHA Demo Mode auth enforcement (real 401s, real token verification) and the audit trail.
+- The original 468 curated mappings and 5-pass algorithm, now correctly TM2/Biomedicine-labeled.
 
-**Not built / explicitly out of scope this pass** — do not claim these to judges:
-- `POST /Bundle` ingestion and the `Consent` resource.
-- **ICD-11 Biomedicine dual-coding** — this repo has no Biomedicine data source at all (NAMASTE ↔
-  ICD-11 **TM2** only); any Biomedicine-labeled UI text elsewhere is illustrative, not backed by data.
-- ABHA OAuth / real authentication — this service has no auth layer.
-- A 2D embedding/ambiguity-map visualization (Phase 5 in the build plan) — not built.
+**Not built / explicitly out of scope** — do not claim these to judges:
+- **Real ABHA OAuth2** — the auth flow above is a clearly-labeled demo stub, not a connection to
+  India's actual ABHA gateway.
+- **`Consent`** — a single static stub resource; no consent is ever actually collected or verified.
+- **ISO 22600 access control** — not implemented; the demo-auth gate is a partial answer at best.
+- **SNOMED CT / LOINC semantics** — no licensed data source available; not attempted.
+- **Live WHO ICD-API sync** — the Biomedicine/TM2 data already present locally covers what's needed
+  tonight; a live sync job to pull WHO's incremental updates was not built.
+- **"WHO International Terminologies of Ayurveda"** — the `ast` table (labeled "Ayurveda Standard
+  Terminology") has not been verified as that exact WHO-published vocabulary; treat it as
+  best-available data, flagged as such in its `CodeSystem` response.
+- A 2D embedding/ambiguity-map visualization — not built.
 - The "run batch" demo button is a single synchronous call + final table, not a live-streaming
   progress UI.
 
