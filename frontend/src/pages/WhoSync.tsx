@@ -5,6 +5,7 @@ import {
   getWhoStatus, getWhoReleases, getWhoDrift, getWhoHistory, runWhoReleaseSync, runWhoApiSync, lookupWhoCode,
   type WhoCodeLookup, type WhoProvenance,
 } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const PROVENANCE_LABEL: Record<WhoProvenance, { text: string; badge: string; hint: string }> = {
   WHO_LIVE: {
@@ -159,6 +160,7 @@ function CodeLookup() {
 }
 
 export default function WhoSync() {
+  const { t } = useLanguage();
   const qc = useQueryClient();
   const [toast, setToast] = useState<string | null>(null);
 
@@ -207,7 +209,7 @@ export default function WhoSync() {
       <div className="page-header">
         <h1 className="page-title">
           <Globe size={20} style={{ verticalAlign: -3, marginRight: 6 }} />
-          WHO ICD-11 Synchronisation
+          {t('page_who_sync_title')}
         </h1>
         <p className="page-desc">
           The rest of this service reads a static ICD-11 snapshot. This page is the live half: it

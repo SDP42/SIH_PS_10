@@ -3,7 +3,7 @@ Extended API endpoints for the AYUSH Nexus frontend.
 Provides statistics, search, concept browsing, and mapping operations.
 """
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
+from typing import List, Optional
 import sqlite3
 import re
 
@@ -225,15 +225,84 @@ def get_concepts(
 # /api/search   (unified cross-system concept search)
 # ---------------------------------------------------------------------------
 
+# Each living NAMASTE tradition's FTS table, term columns (transliteration +
+# native script where the source data has one), and how to label results.
+# Unani has no name_english equivalent; Siddha and Unani have no long_definition
+# column in their CSVs — see data/*.csv headers.
+_NAMASTE_TRADITIONS = [
+    {
+        "fts_table": "nam_fts", "code_col": "namc_code", "term_col": "namc_term",
+        "native_col": "namc_term_devanagari", "native_lang": "Devanagari (Sanskrit)",
+        "def_col": "long_definition", "eng_col": "name_english",
+        "tradition": "Ayurveda", "system": "NAMASTE",
+    },
+    {
+        "fts_table": "nsm_fts", "code_col": "namc_code", "term_col": "namc_term",
+        "native_col": "tamil_term", "native_lang": "Tamil",
+        "def_col": "short_definition", "eng_col": None,
+        "tradition": "Siddha", "system": "NAMASTE",
+    },
+    {
+        "fts_table": "num_fts", "code_col": "numc_code", "term_col": "numc_term",
+        "native_col": "arabic_term", "native_lang": "Arabic",
+        "def_col": "short_definition", "eng_col": None,
+        "tradition": "Unani", "system": "NAMASTE",
+    },
+]
+
+
+def _search_namaste_traditions(cur, fts_query: str, page_size: int, offset: int) -> List[dict]:
+    """
+    Search across all three living NAMASTE traditions in one call. Each was
+    previously searchable only in its transliterated form (or, for Unani, not
+    searchable by term at all — num_fts didn't index a term column before
+    scripts/migrate_multilingual_fts.py). Now a query in Devanagari, Tamil, or
+    Arabic script resolves directly, because the FTS index actually contains
+    that script — see that migration's docstring for why it was missing.
+    """
+    results = []
+    for t in _NAMASTE_TRADITIONS:
+        select_cols = f'{t["code_col"]}, {t["term_col"]}, {t["native_col"]}, {t["def_col"]}'
+        if t["eng_col"]:
+            select_cols += f', {t["eng_col"]}'
+        try:
+            cur.execute(
+                f"""
+                SELECT {select_cols} FROM {t['fts_table']}
+                WHERE {t['fts_table']} MATCH ?
+                LIMIT ? OFFSET ?
+                """,
+                (fts_query, page_size, offset),
+            )
+            rows = cur.fetchall()
+        except Exception:
+            rows = []
+
+        for r in rows:
+            results.append({
+                "code": r[t["code_col"]],
+                "display": r[t["term_col"]],
+                "native_script": r[t["native_col"]] if r[t["native_col"]] not in (None, "-", "") else None,
+                "native_script_language": t["native_lang"],
+                "name_english": r[t["eng_col"]] if t["eng_col"] else None,
+                "definition": r[t["def_col"]],
+                "system": t["system"],
+                "system_id": "namaste",
+                "tradition": t["tradition"],
+            })
+    return results
+
+
 @router.get("/search")
 def search_concepts(
-    q: str = Query(..., min_length=1, description="Search term"),
+    q: str = Query(..., min_length=1, description="Search term — English, or native script (Devanagari, Tamil, Arabic)"),
     system: Optional[str] = Query(None, description="namaste | icd11 | both"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
     """
-    Unified full-text search across NAMASTE and/or ICD-11 terminologies.
+    Unified full-text search across NAMASTE (all three living traditions —
+    Ayurveda, Siddha, Unani, each in its own native script) and/or ICD-11.
     """
     conn = get_db()
     cur = conn.cursor()
@@ -247,29 +316,7 @@ def search_concepts(
     system = (system or "both").lower()
 
     if system in ("namaste", "both"):
-        try:
-            cur.execute(
-                """
-                SELECT namc_code, namc_term, name_english, short_definition
-                FROM nam_fts
-                WHERE nam_fts MATCH ?
-                LIMIT ? OFFSET ?
-                """,
-                (fts_query, page_size, offset),
-            )
-            namaste_results = [
-                {
-                    "code": r["namc_code"],
-                    "display": r["namc_term"],
-                    "name_english": r["name_english"],
-                    "definition": r["short_definition"],
-                    "system": "NAMASTE",
-                    "system_id": "namaste",
-                }
-                for r in cur.fetchall()
-            ]
-        except Exception:
-            namaste_results = []
+        namaste_results = _search_namaste_traditions(cur, fts_query, page_size, offset)
 
     if system in ("icd11", "both"):
         try:

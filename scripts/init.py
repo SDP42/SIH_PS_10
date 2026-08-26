@@ -87,7 +87,7 @@ def main():
         db_path=DB_PATH,
         table_name="nam",
         fts_table_name="nam_fts",
-        fts_columns=["namc_code","namc_term", "long_definition"]
+        fts_columns=["namc_code","namc_term", "namc_term_devanagari", "name_english", "long_definition"]
     )
     
     # Index NAMASTE Siddha Morbidity
@@ -98,7 +98,7 @@ def main():
         db_path=DB_PATH,
         table_name="nsm",
         fts_table_name="nsm_fts",
-        fts_columns=["namc_code", "namc_term", "short_definition"]
+        fts_columns=["namc_code", "namc_term", "tamil_term", "short_definition"]
     )
     
     # Index NAMASTE Unani Morbidity
@@ -109,7 +109,7 @@ def main():
         db_path=DB_PATH,
         table_name="num",
         fts_table_name="num_fts",
-        fts_columns=["numc_code", "short_definition"]
+        fts_columns=["numc_code", "arabic_term", "numc_term", "short_definition"]
     )
     
     # Index Ayurveda Standard Terminology

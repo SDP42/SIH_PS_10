@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getConcepts, searchConcepts, type ConceptResult } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 import { Search, Filter, X, ChevronRight, BookOpen } from 'lucide-react';
 
 const SYSTEMS = [
@@ -10,6 +11,7 @@ const SYSTEMS = [
 ];
 
 export default function TerminologyExplorer() {
+  const { t } = useLanguage();
   const [system, setSystem] = useState('namaste');
   const [q, setQ] = useState('');
   const [inputVal, setInputVal] = useState('');
@@ -47,8 +49,8 @@ export default function TerminologyExplorer() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Terminology Explorer</h1>
-        <p className="page-desc">Explore standardized traditional medicine concepts and their cross-system relationships.</p>
+        <h1 className="page-title">{t('page_terminology_title')}</h1>
+        <p className="page-desc">{t('page_terminology_desc')}</p>
       </div>
 
       <div className="demo-banner">
@@ -72,7 +74,7 @@ export default function TerminologyExplorer() {
             <Search size={15} className="input-icon" />
             <input
               className="input"
-              placeholder="Search NAMASTE, Ayurveda, Siddha, Unani or ICD-11 terminology…"
+              placeholder={t('terminology_search_placeholder')}
               value={inputVal}
               onChange={e => setInputVal(e.target.value)}
             />
@@ -154,11 +156,19 @@ export default function TerminologyExplorer() {
                   <tr key={`${c.code}-${i}`}>
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>{c.display || c.code}</div>
+                      {c.native_script && (
+                        <div style={{ fontSize: 13, color: 'var(--accent)', marginTop: 2 }} title={c.native_script_language || undefined}>
+                          {c.native_script}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span className={`badge badge-${c.system_id === 'namaste' ? 'active' : 'related'}`}>
-                        {c.system}
+                        {c.tradition || c.system}
                       </span>
+                      {c.native_script_language && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>{c.native_script_language}</div>
+                      )}
                     </td>
                     <td><span className="td-code">{c.code}</span></td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 12.5 }}>{c.name_english || '—'}</td>

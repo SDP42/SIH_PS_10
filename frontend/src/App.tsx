@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 import DemoLogin from './pages/DemoLogin';
 import Landing from './pages/Landing';
 import { DemoAuthProvider, useDemoAuth } from './auth/DemoAuthContext';
+import { LanguageProvider } from './i18n/LanguageContext';
 import './index.css';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 2, staleTime: 30000 } } });
@@ -26,6 +27,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
+      <LanguageProvider>
       <DemoAuthProvider>
         <BrowserRouter>
           <Routes>
@@ -45,6 +47,7 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </DemoAuthProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }

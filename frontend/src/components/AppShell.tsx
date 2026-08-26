@@ -6,22 +6,25 @@ import {
 } from 'lucide-react';
 import { getStats } from '../api';
 import { useDemoAuth } from '../auth/DemoAuthContext';
+import { useLanguage } from '../i18n/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const NAV = [
-  { to: '/overview', icon: LayoutDashboard, label: 'Overview' },
-  { to: '/terminology', icon: Search, label: 'Terminology Explorer' },
-  { to: '/mapping', icon: GitMerge, label: 'Mapping Intelligence' },
-  { to: '/ai-lab', icon: Sparkles, label: 'AI Mapping Lab' },
-  { to: '/review-queue', icon: ClipboardCheck, label: 'Expert Review' },
-  { to: '/fhir', icon: Activity, label: 'FHIR Workspace' },
-  { to: '/who-sync', icon: Globe, label: 'WHO Sync' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/overview', icon: LayoutDashboard, key: 'nav_overview' },
+  { to: '/terminology', icon: Search, key: 'nav_terminology' },
+  { to: '/mapping', icon: GitMerge, key: 'nav_mapping' },
+  { to: '/ai-lab', icon: Sparkles, key: 'nav_ai_lab' },
+  { to: '/review-queue', icon: ClipboardCheck, key: 'nav_review_queue' },
+  { to: '/fhir', icon: Activity, key: 'nav_fhir' },
+  { to: '/who-sync', icon: Globe, key: 'nav_who_sync' },
+  { to: '/analytics', icon: BarChart3, key: 'nav_analytics' },
+  { to: '/settings', icon: Settings, key: 'nav_settings' },
 ];
 
 export default function AppShell() {
   const navigate = useNavigate();
   const { session, logout } = useDemoAuth();
+  const { t } = useLanguage();
 
   // Real backend liveness check (not a hardcoded "Operational" dot) — any
   // successful real endpoint call proves the API is actually reachable.
@@ -52,16 +55,16 @@ export default function AppShell() {
           <div className="sidebar-logo-icon"><Leaf size={20} /></div>
           <div>
             <div className="sidebar-logo-text">AYUSH Nexus</div>
-            <div className="sidebar-logo-sub">Interoperability Platform</div>
+            <div className="sidebar-logo-sub">{t('sidebar_subtitle')}</div>
           </div>
           <span className="sidebar-badge">β4</span>
         </div>
 
         <nav className="sidebar-nav">
-          {NAV.map(({ to, icon: Icon, label }) => (
+          {NAV.map(({ to, icon: Icon, key }) => (
             <NavLink key={to} to={to} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
               <Icon size={16} />
-              <span>{label}</span>
+              <span>{t(key)}</span>
             </NavLink>
           ))}
         </nav>
@@ -69,15 +72,15 @@ export default function AppShell() {
         <div className="sidebar-footer">
           <div className="sidebar-status">
             <span className={`status-dot${backendDown ? ' syncing' : ''}`} />
-            <span>{backendDown ? 'Backend Unreachable' : backendUp ? 'Backend Connected' : 'Checking…'}</span>
+            <span>{backendDown ? t('status_backend_unreachable') : backendUp ? t('status_backend_connected') : t('status_checking')}</span>
           </div>
           <div className="sidebar-status">
             <span className="status-dot syncing" />
-            <span>ABHA Demo Mode Auth</span>
+            <span>{t('status_abha_demo')}</span>
           </div>
           <div className="sidebar-status">
             <span className="status-dot" />
-            <span>FHIR R4 Gateway Ready</span>
+            <span>{t('status_fhir_ready')}</span>
           </div>
         </div>
       </aside>
@@ -94,11 +97,12 @@ export default function AppShell() {
             <div className="header-context">
               <strong>NAMASTE v1.2</strong> / ICD-11 TM2 v2022.1
             </div>
+            <LanguageSwitcher />
             <div className="header-user">
               <div className="header-user-name">{session?.identity.name || 'Unknown'}</div>
               <div className="header-user-role">{session?.identity.role || ''}</div>
             </div>
-            <div className="header-avatar" title="Log out" onClick={handleLogout} style={{ cursor: 'pointer' }}>
+            <div className="header-avatar" title={t('action_log_out')} onClick={handleLogout} style={{ cursor: 'pointer' }}>
               {initials || <LogOut size={14} />}
             </div>
           </div>

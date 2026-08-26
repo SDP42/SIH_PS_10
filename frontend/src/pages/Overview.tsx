@@ -1,3 +1,4 @@
+import { useLanguage } from '../i18n/LanguageContext';
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getStats, getTerminologies, getUnmapped, getReviewQueue, getRecentAudit } from '../api';
@@ -20,6 +21,7 @@ function StatCard({ label, value, sub, icon: Icon, iconColor = 'var(--accent)' }
 }
 
 export default function Overview() {
+  const { t } = useLanguage();
   const { data: stats, isLoading: statsLoading } = useQuery({ queryKey: ['stats'], queryFn: getStats });
   const { data: terminologies, isLoading: termsLoading } = useQuery({ queryKey: ['terminologies'], queryFn: getTerminologies });
   const { data: unmapped } = useQuery({
@@ -46,8 +48,8 @@ export default function Overview() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">AYUSH Interoperability Gateway</h1>
-        <p className="page-desc">Intelligent gateway connecting traditional medicine terminology with globally interoperable digital health records.</p>
+        <h1 className="page-title">{t('page_overview_title')}</h1>
+        <p className="page-desc">{t('page_overview_desc')}</p>
       </div>
 
       <div className="demo-banner">
@@ -113,18 +115,18 @@ export default function Overview() {
           </div>
           {termsLoading ? (
             [0,1].map(i => <div key={i} className="skeleton skeleton-line mt-2" />)
-          ) : terminologies ? terminologies.map(t => (
-            <div className="term-row" key={t.id}>
-              <Activity size={15} color={t.status === 'active' ? 'var(--success)' : 'var(--warning)'} />
+          ) : terminologies ? terminologies.map(term => (
+            <div className="term-row" key={term.id}>
+              <Activity size={15} color={term.status === 'active' ? 'var(--success)' : 'var(--warning)'} />
               <div>
-                <div className="term-name">{t.name}</div>
-                <div className="term-version">{t.version}</div>
+                <div className="term-name">{term.name}</div>
+                <div className="term-version">{term.version}</div>
               </div>
               <div className="term-sync">
-                <span className={`badge badge-${t.status === 'active' ? 'active' : 'pending'}`}>
-                  {t.status === 'active' ? '● Synchronized' : '● Syncing'}
+                <span className={`badge badge-${term.status === 'active' ? 'active' : 'pending'}`}>
+                  {term.status === 'active' ? '● Synchronized' : '● Syncing'}
                 </span>
-                <div style={{marginTop:3}}>{t.concept_count.toLocaleString()} concepts</div>
+                <div style={{marginTop:3}}>{term.concept_count.toLocaleString()} concepts</div>
               </div>
             </div>
           )) : null}

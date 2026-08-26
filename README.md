@@ -92,6 +92,7 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | 📊 **Audit Exports** | CSV + summary exports for governance and clinical review |
 | 🏥 **EMR-Ready** | Drop-in REST API for AYUSH and allopathic EMR integration |
 | 🌐 **WHO ICD-API Sync** | Live OAuth2 sync against WHO's ICD-API with drift detection — degrades to the offline snapshot when WHO is unreachable |
+| 🗣️ **Multilingual** | Real Devanagari/Tamil/Arabic terminology search (not translated — sourced from the NAMASTE CSVs) + English/Hindi/Marathi/Gujarati UI |
 
 ---
 
@@ -740,6 +741,39 @@ enforcement on both `POST` endpoints.
   progress UI.
 
 ---
+
+## 🗣️ Multilingual
+
+Two genuinely different things live under "multilingual," and this project deliberately keeps them
+separate so neither one overclaims:
+
+**1. Real native-script terminology search.** Every NAMASTE tradition's source CSV already carries a
+native-script term column — `namc_term_devanagari` (Ayurveda/Sanskrit), `tamil_term` (Siddha),
+`arabic_term` (Unani) — but before this pass, none of it was searchable. `nam_fts` indexed only the
+IAST transliteration (`vyAdhi-viniScayaH`, never `व्याधि-विनिश्चयः`); `nsm_fts` never indexed
+`tamil_term`; `num_fts` didn't index a term column of any kind, so **Unani was not searchable by name
+in any script**. `scripts/migrate_multilingual_fts.py` rebuilds all three FTS indexes to include the
+real native-script column, and `GET /api/search` now queries all three living traditions together
+(previously it silently covered Ayurveda only). This is not translation — it's exposing data that was
+already there. Try it:
+
+```bash
+curl -s "http://localhost:8000/api/search?q=%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A4%AE%E0%A5%87%E0%A4%B9&system=namaste" | python3 -m json.tool   # प्रमेह — Ayurveda
+curl -s "http://localhost:8000/api/search?q=%E0%AE%9A%E0%AE%BF%E0%AE%A4%E0%AF%8D%E0%AE%A4%E0%AE%BE&system=namaste" | python3 -m json.tool   # சித்தா — Siddha
+curl -s "http://localhost:8000/api/search?q=%D8%B1%D8%B7%D9%88%D8%A8%D8%AA&system=namaste"   | python3 -m json.tool   # رطوبت — Unani
+```
+
+Each result carries `native_script`, `native_script_language`, and `tradition` fields; the
+Terminology Explorer renders the native-script term inline with a language badge.
+
+**2. UI localization (English / Hindi / Marathi / Gujarati).** `frontend/src/i18n/` holds a small,
+hand-written dictionary for interface chrome — navigation, page headers, common action labels — with
+a `LanguageProvider` context and a switcher in the top header (persisted to `localStorage`). This is
+scoped deliberately: it covers the sidebar nav (always visible) and the headers of the newest pages
+(Terminology Explorer, Analytics, WHO Sync, Overview), not every microcopy string across all nine
+pages, and it never touches clinical terminology — that's real data (above), not translated copy.
+Marathi and Gujarati have no columns anywhere in the NAMASTE source data, so no clinical term is ever
+translated into them; only ordinary interface vocabulary is.
 
 ## 🔧 Advanced Usage
 

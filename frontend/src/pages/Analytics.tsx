@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, ShieldCheck, ClipboardList, Globe, Activity, Info } from 'lucide-react';
 import { getAnalyticsOverview, type TraditionCoverage } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
   return (
@@ -52,6 +53,7 @@ function TraditionRow({ t }: { t: TraditionCoverage }) {
 }
 
 export default function Analytics() {
+  const { t } = useLanguage();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['analytics-overview'],
     queryFn: getAnalyticsOverview,
@@ -87,7 +89,7 @@ export default function Analytics() {
       <div className="page-header">
         <h1 className="page-title">
           <BarChart3 size={20} style={{ verticalAlign: -3, marginRight: 6 }} />
-          Governance &amp; Interoperability Analytics
+          {t('page_analytics_title')}
         </h1>
         <p className="page-desc">
           A live, oversight-level view of the terminology bridge: corpus size and mapping coverage per

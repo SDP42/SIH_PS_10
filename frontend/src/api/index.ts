@@ -30,6 +30,9 @@ export interface ConceptResult {
   definition?: string;
   system: string;
   system_id: string;
+  native_script?: string | null;
+  native_script_language?: string | null;
+  tradition?: string;
 }
 
 export interface ConceptsResponse {
