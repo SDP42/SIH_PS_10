@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sparkles, Search, PlayCircle, ChevronRight } from 'lucide-react';
 import {
-  getAiSuggestion, getUnmapped, batchSuggest,
+  getDualAiSuggestion, getUnmapped, batchSuggest,
   type AiSuggestion, type AiDecision,
 } from '../api';
 
@@ -37,11 +37,12 @@ function SimilarityBar({ value }: { value: number }) {
   );
 }
 
-function SuggestionCard({ suggestion }: { suggestion: AiSuggestion }) {
+function SuggestionCard({ suggestion, poolLabel }: { suggestion: AiSuggestion; poolLabel: string }) {
   return (
     <div className="card mb-4">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>{poolLabel}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>{suggestion.source_system}</div>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{suggestion.namaste_code}</div>
         </div>
@@ -79,7 +80,7 @@ function SuggestionCard({ suggestion }: { suggestion: AiSuggestion }) {
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>#</th><th>ICD-11 TM2 Candidate</th><th>Code</th><th>Similarity</th><th>Shared Terms</th></tr>
+            <tr><th>#</th><th>{poolLabel} Candidate</th><th>Code</th><th>Similarity</th><th>Shared Terms</th></tr>
           </thead>
           <tbody>
             {suggestion.candidates.map((c) => (
@@ -112,9 +113,9 @@ export default function AiMappingLab() {
     queryFn: () => getUnmapped({ page: 1, page_size: 8 }),
   });
 
-  const { data: suggestion, isLoading, isError, error } = useQuery({
-    queryKey: ['ai-suggest', activeCode],
-    queryFn: () => getAiSuggestion(activeCode as string),
+  const { data: dualSuggestion, isLoading, isError, error } = useQuery({
+    queryKey: ['ai-suggest-dual', activeCode],
+    queryFn: () => getDualAiSuggestion(activeCode as string),
     enabled: !!activeCode,
     retry: false,
   });
@@ -184,7 +185,12 @@ export default function AiMappingLab() {
           <div className="empty-state-desc">{(error as any)?.detail?.message || (error as any)?.message || 'Code not found or AI engine not ready.'}</div>
         </div>
       )}
-      {suggestion && <SuggestionCard suggestion={suggestion} />}
+      {dualSuggestion && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <SuggestionCard suggestion={dualSuggestion.tm2} poolLabel="ICD-11 TM2" />
+          <SuggestionCard suggestion={dualSuggestion.biomedicine} poolLabel="ICD-11 Biomedicine" />
+        </div>
+      )}
 
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
