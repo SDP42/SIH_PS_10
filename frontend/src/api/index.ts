@@ -596,3 +596,51 @@ export interface PopulationDemoPayload {
 
 export const getPopulationDemo = () =>
   apiClient.get<PopulationDemoPayload>('/api/analytics/population-demo').then((r) => r.data);
+
+// ---- Terminology What-If Simulator (Phase 3) ----
+
+export interface SimulationResult {
+  id: number;
+  from_release: string;
+  to_release: string;
+  run_at: string;
+  run_by: string;
+  new_concepts: number;
+  deprecated_concepts: number;
+  retitled_concepts: number;
+  broken_mappings: number;
+  ambiguous_mappings: number;
+  total_mappings_checked: number;
+  from_release_concept_count: number;
+  to_release_concept_count: number;
+  risk_score: 'LOW' | 'MEDIUM' | 'HIGH';
+  disclaimer: string;
+}
+
+export interface AffectedMapping {
+  id: number;
+  simulation_id: number;
+  concept_map_id: number | null;
+  source_system: string;
+  source_code: string;
+  target_code: string;
+  impact_type: 'BROKEN_MAPPING' | 'AMBIGUOUS_MAPPING';
+  old_title: string | null;
+  new_title: string | null;
+  review_queue_id: number | null;
+}
+
+export const getSimulatorReleases = () =>
+  apiClient.get<{ releases: string[]; latest: string | null; snapshot_release: string }>('/api/v1/terminology/releases').then((r) => r.data);
+
+export const runSimulation = (from_release: string, to_release: string) =>
+  apiClient.post<SimulationResult>('/api/v1/terminology/simulate', { from_release, to_release }).then((r) => r.data);
+
+export const getAffectedMappings = (simId: number) =>
+  apiClient.get<{ items: AffectedMapping[] }>(`/api/v1/terminology/simulate/${simId}/affected-mappings`).then((r) => r.data);
+
+export const escalateSimulation = (simId: number) =>
+  apiClient.post<{ simulation_id: number; review_queue_ids: number[]; count: number }>(`/api/v1/terminology/simulate/${simId}/escalate`).then((r) => r.data);
+
+export const getSimulationHistory = () =>
+  apiClient.get<{ simulations: SimulationResult[] }>('/api/v1/terminology/simulations').then((r) => r.data);

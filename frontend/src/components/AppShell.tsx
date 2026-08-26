@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Search, GitMerge, Activity,
-  Settings, Leaf, Sparkles, ClipboardCheck, LogOut, Globe, BarChart3, MessageSquareText, KeyRound, FlaskConical
+  Settings, Leaf, Sparkles, ClipboardCheck, LogOut, Globe, BarChart3, MessageSquareText, KeyRound, FlaskConical, GitCompareArrows
 } from 'lucide-react';
 import { getStats } from '../api';
 import { useDemoAuth } from '../auth/DemoAuthContext';
@@ -18,6 +18,7 @@ const NAV = [
   { to: '/review-queue', icon: ClipboardCheck, key: 'nav_review_queue' },
   { to: '/fhir', icon: Activity, key: 'nav_fhir' },
   { to: '/who-sync', icon: Globe, key: 'nav_who_sync' },
+  { to: '/what-if-simulator', icon: GitCompareArrows, key: 'nav_what_if' },
   { to: '/analytics', icon: BarChart3, key: 'nav_analytics' },
   { to: '/population-demo', icon: FlaskConical, key: 'nav_population_demo' },
   { to: '/developer-portal', icon: KeyRound, key: 'nav_developer_portal' },

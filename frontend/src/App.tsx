@@ -12,6 +12,7 @@ import Analytics from './pages/Analytics';
 import ClinicalTextAssistant from './pages/ClinicalTextAssistant';
 import DeveloperPortal from './pages/DeveloperPortal';
 import PopulationHealthDemo from './pages/PopulationHealthDemo';
+import WhatIfSimulator from './pages/WhatIfSimulator';
 import Settings from './pages/Settings';
 import DemoLogin from './pages/DemoLogin';
 import Landing from './pages/Landing';
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="/clinical-text" element={<ClinicalTextAssistant />} />
               <Route path="/developer-portal" element={<DeveloperPortal />} />
               <Route path="/population-demo" element={<PopulationHealthDemo />} />
+              <Route path="/what-if-simulator" element={<WhatIfSimulator />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>

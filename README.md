@@ -96,6 +96,7 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | 💬 **Clinical Text Assistant** | Free-text symptom extraction (negation/duration/site-aware) with real terminology candidates — never infers a diagnosis |
 | 🔑 **API Key Developer Platform** | Real key issuance, scopes, rate limiting, rotation/revocation, and a versioned `/api/v1` surface an EMR could actually integrate against |
 | 🧪 **Population Health Demo** | 2,200 synthetic patients across gender/region/time, structurally isolated from — and never mixed into — the real governance analytics |
+| 🔀 **Terminology What-If Simulator** | Diffs any two real WHO ICD-11 releases and reports exactly which curated mappings would break or go ambiguous — before the release ships |
 
 ---
 
@@ -891,6 +892,40 @@ level, on purpose:
 
 Say out loud, every time this page comes up in a demo: *"this is illustrative, not real usage — the
 Analytics page next to it is the real one."*
+
+## 🔀 Terminology What-If Simulator (Phase 3)
+
+Answers a question the live WHO sync feature can only answer for one fixed pair of releases (our
+shipped snapshot vs. whatever WHO currently publishes), generalised to **any** two releases:
+*"if the terminology moved from release X to release Y, what in our own mapping registry breaks?"*
+
+Built as a thin layer over `app/who_sync.py` &mdash; `fetch_release_table()` already does the real work
+(download, cache, parse WHO's release format); this module only adds diffing two arbitrary releases
+against each other, then joining that diff against `concept_map` to find real impact.
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/terminology/simulate \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"from_release": "2025-01", "to_release": "2026-01"}' | python3 -m json.tool
+```
+
+Verified against real WHO releases, matching this project's own known ground truth exactly: comparing
+`2025-01` (the shipped snapshot) against WHO's actual current `2026-01` release reports **2 broken
+mappings** &mdash; the same two glaucoma codes (`9C6Y`, `9C6Z`) the WHO Sync feature already found
+independently. A same-release sanity check (`2025-01` vs `2025-01`) correctly reports zero of
+everything.
+
+**Safety discipline, same as everywhere else in this project:** running a simulation is 100% read-only
+against `concept_map` and `review_queue` &mdash; it only writes to its own `terminology_simulations`
+tables. Nothing is modified until an operator explicitly calls
+`POST /api/v1/terminology/simulate/{id}/escalate`, which inserts new `review_queue` rows (flagged
+`terminology_drift`, distinct from AI suggestions) for a human to look at. It never rewrites or deletes
+an existing curated mapping, and escalating the same simulation twice is idempotent &mdash; it does not
+duplicate review-queue rows.
+
+The **What-If Simulator** page (`/what-if-simulator`) does this end-to-end: pick two real WHO releases
+from a live dropdown, run the diff, see the risk score and affected-mappings table, escalate to the
+real expert review queue with one click.
 
 ## 🔧 Advanced Usage
 
