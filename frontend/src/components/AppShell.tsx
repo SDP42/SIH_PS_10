@@ -1,13 +1,15 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Search, GitMerge, Star, Users, Activity,
-  RefreshCw, Shield, Settings, Leaf
+  RefreshCw, Shield, Settings, Leaf, Sparkles, ClipboardCheck
 } from 'lucide-react';
 
 const NAV = [
   { to: '/overview', icon: LayoutDashboard, label: 'Overview' },
   { to: '/terminology', icon: Search, label: 'Terminology Explorer' },
   { to: '/mapping', icon: GitMerge, label: 'Mapping Intelligence' },
+  { to: '/ai-lab', icon: Sparkles, label: 'AI Mapping Lab' },
+  { to: '/review-queue', icon: ClipboardCheck, label: 'Expert Review' },
   { to: '/fhir', icon: Activity, label: 'FHIR Workspace' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

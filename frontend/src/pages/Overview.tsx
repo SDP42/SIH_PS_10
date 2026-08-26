@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getStats, getTerminologies } from '../api';
-import { BookOpen, GitMerge, CheckCircle, Clock, RefreshCw, Activity } from 'lucide-react';
+import { getStats, getTerminologies, getUnmapped, getReviewQueue } from '../api';
+import { BookOpen, GitMerge, CheckCircle, Clock, RefreshCw, Activity, Sparkles, ClipboardList } from 'lucide-react';
 
 function StatCard({ label, value, sub, icon: Icon, iconColor = 'var(--accent)' }: {
   label: string; value: string | number; sub?: string;
@@ -29,6 +29,21 @@ const AUDIT_EVENTS = [
 export default function Overview() {
   const { data: stats, isLoading: statsLoading } = useQuery({ queryKey: ['stats'], queryFn: getStats });
   const { data: terminologies, isLoading: termsLoading } = useQuery({ queryKey: ['terminologies'], queryFn: getTerminologies });
+  const { data: unmapped } = useQuery({
+    queryKey: ['ai-unmapped-count'],
+    queryFn: () => getUnmapped({ page: 1, page_size: 1 }),
+    retry: false,
+  });
+  const { data: pendingReviews } = useQuery({
+    queryKey: ['ai-pending-count'],
+    queryFn: () => getReviewQueue({ status: 'pending', page: 1, page_size: 1 }),
+    retry: false,
+  });
+  const { data: approvedReviews } = useQuery({
+    queryKey: ['ai-approved-count'],
+    queryFn: () => getReviewQueue({ status: 'approved', page: 1, page_size: 1 }),
+    retry: false,
+  });
 
   return (
     <div>
@@ -53,6 +68,38 @@ export default function Overview() {
             <StatCard label="Total Mappings" value={stats.total_mappings.toLocaleString()} sub={`${stats.mapped_namaste_codes} NAMASTE codes covered`} icon={GitMerge} iconColor="var(--warning)" />
           </>
         ) : null}
+      </div>
+
+      {/* AI / Governance stats — live from the ambiguity-aware mapping engine */}
+      <div className="grid-4 mb-4">
+        <StatCard
+          label="Unmapped NAMASTE Codes"
+          value={unmapped ? unmapped.total_unmapped.toLocaleString() : '—'}
+          sub="Gap the AI engine targets"
+          icon={Sparkles}
+          iconColor="var(--warning)"
+        />
+        <StatCard
+          label="AI Suggestions Pending Review"
+          value={pendingReviews ? pendingReviews.total.toLocaleString() : '—'}
+          sub="Awaiting human decision"
+          icon={ClipboardList}
+          iconColor="var(--info)"
+        />
+        <StatCard
+          label="AI-Reviewed Mappings Added"
+          value={approvedReviews ? approvedReviews.total.toLocaleString() : '—'}
+          sub="Approved into the curated registry"
+          icon={CheckCircle}
+          iconColor="var(--success)"
+        />
+        <StatCard
+          label="AI Engine"
+          value={unmapped ? 'Ready' : 'Not built'}
+          sub={unmapped ? 'Embeddings loaded' : 'Run build_embeddings.py'}
+          icon={Activity}
+          iconColor={unmapped ? 'var(--success)' : 'var(--danger)'}
+        />
       </div>
 
       <div className="grid-2">

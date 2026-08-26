@@ -163,3 +163,102 @@ export const getFhirConceptMap = (code: string) =>
 
 export const getRootInfo = () =>
   apiClient.get('/').then((r) => r.data);
+
+// ---- AI Mapping Engine (ambiguity-aware) ----
+
+export type AiDecision = 'AUTO_SUGGEST' | 'NEEDS_CONTEXT' | 'EXPERT_REVIEW' | 'NO_VALIDATED_EQUIVALENT';
+
+export interface AiCandidate {
+  icd11_code: string;
+  icd11_title: string;
+  similarity: number;
+  semantic_score: number;
+  lexical_score: number;
+  shared_terms: string[];
+  rank: number;
+}
+
+export interface CuratedMapping {
+  target_code: string;
+  equivalence: string;
+  target_title?: string;
+}
+
+export interface AiSuggestion {
+  namaste_code: string;
+  source_system: string;
+  decision: AiDecision;
+  margin: number | null;
+  candidates: AiCandidate[];
+  rationale: string;
+  has_curated_mapping: boolean;
+  curated_mappings: CuratedMapping[];
+  disclaimer: string;
+}
+
+export interface UnmappedConcept {
+  system: string;
+  code: string;
+  display_text: string;
+}
+
+export interface UnmappedResponse {
+  total_unmapped: number;
+  page: number;
+  page_size: number;
+  concepts: UnmappedConcept[];
+}
+
+export const getAiSuggestion = (code: string, params?: { source_system?: string; top_k?: number }) =>
+  apiClient.get<AiSuggestion>(`/api/ai/suggest/${encodeURIComponent(code)}`, { params }).then((r) => r.data);
+
+export const getUnmapped = (params: { page?: number; page_size?: number; source_system?: string }) =>
+  apiClient.get<UnmappedResponse>('/api/ai/unmapped', { params }).then((r) => r.data);
+
+export interface BatchSuggestResponse {
+  requested: number;
+  results: (AiSuggestion | { namaste_code: string; error: string })[];
+}
+
+export const batchSuggest = (body: { codes?: string[]; all_unmapped?: boolean; limit?: number; source_system?: string }) =>
+  apiClient.post<BatchSuggestResponse>('/api/ai/batch_suggest', body).then((r) => r.data);
+
+// ---- Governance / Review Queue ----
+
+export interface ReviewQueueItem {
+  id: number;
+  source_system: string;
+  source_code: string;
+  ai_suggested_code: string | null;
+  ai_suggested_title: string | null;
+  confidence: number | null;
+  decision: AiDecision;
+  rationale: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'needs_info';
+  reviewer_note: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface ReviewQueueResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: ReviewQueueItem[];
+}
+
+export const getReviewQueue = (params?: { status?: string; page?: number; page_size?: number }) =>
+  apiClient.get<ReviewQueueResponse>('/api/governance/queue', { params }).then((r) => r.data);
+
+export const decideReviewItem = (id: number, body: { status: string; note?: string }) =>
+  apiClient.post(`/api/governance/${id}/decide`, body).then((r) => r.data);
+
+// ---- FHIR $translate ----
+
+export interface FhirParameters {
+  resourceType: string;
+  parameter: Array<Record<string, unknown>>;
+}
+
+export const translateConcept = (params: { system: string; code: string; target_system?: string }) =>
+  apiClient.get<FhirParameters>('/ConceptMap/$translate', { params }).then((r) => r.data);

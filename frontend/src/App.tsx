@@ -4,6 +4,8 @@ import AppShell from './components/AppShell';
 import Overview from './pages/Overview';
 import TerminologyExplorer from './pages/TerminologyExplorer';
 import MappingIntelligence from './pages/MappingIntelligence';
+import AiMappingLab from './pages/AiMappingLab';
+import ReviewQueue from './pages/ReviewQueue';
 import FhirWorkspace from './pages/FhirWorkspace';
 import Settings from './pages/Settings';
 import './index.css';
@@ -20,6 +22,8 @@ export default function App() {
             <Route path="/overview" element={<Overview />} />
             <Route path="/terminology" element={<TerminologyExplorer />} />
             <Route path="/mapping" element={<MappingIntelligence />} />
+            <Route path="/ai-lab" element={<AiMappingLab />} />
+            <Route path="/review-queue" element={<ReviewQueue />} />
             <Route path="/fhir" element={<FhirWorkspace />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
