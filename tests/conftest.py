@@ -37,8 +37,9 @@ import app.who_sync as _who_sync
 import app.analytics as _analytics
 import app.apikeys as _apikeys
 import app.v1_router as _v1_router
+import app.population_analytics as _population_analytics
 
-for _mod in (_api, _conceptmap, _ai_mapping, _governance, _fhir_extra, _audit, _who_sync, _analytics, _apikeys, _v1_router):
+for _mod in (_api, _conceptmap, _ai_mapping, _governance, _fhir_extra, _audit, _who_sync, _analytics, _apikeys, _v1_router, _population_analytics):
     _mod.DB_PATH = TEST_DB_PATH
 
 _governance.ensure_schema()

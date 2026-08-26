@@ -95,6 +95,7 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | 🗣️ **Multilingual** | Real Devanagari/Tamil/Arabic terminology search (not translated — sourced from the NAMASTE CSVs) + English/Hindi/Marathi/Gujarati UI |
 | 💬 **Clinical Text Assistant** | Free-text symptom extraction (negation/duration/site-aware) with real terminology candidates — never infers a diagnosis |
 | 🔑 **API Key Developer Platform** | Real key issuance, scopes, rate limiting, rotation/revocation, and a versioned `/api/v1` surface an EMR could actually integrate against |
+| 🧪 **Population Health Demo** | 2,200 synthetic patients across gender/region/time, structurally isolated from — and never mixed into — the real governance analytics |
 
 ---
 
@@ -857,6 +858,39 @@ key, see the secret exactly once, then call the live `/api/v1` API with it and w
 against ICD-11 is what led to re-testing `/api/search`'s ICD-11 branch directly, which is how the
 FTS5-alias bug (see the Clinical Text Assistant section above) was actually found and fixed. ICD-11
 search had been silently returning zero results everywhere in this codebase before that fix.
+
+## 🧪 Population Health Demo (Synthetic Data)
+
+A separate page (`/population-demo`, `GET /api/analytics/population-demo`) illustrating what a
+national AYUSH population-health view could look like at realistic volume &mdash; gender, region, and
+time breakdowns a government stakeholder would want to see. **Every patient and encounter here is
+fabricated.** `scripts/generate_synthetic_population.py` generates 2,000&ndash;2,500 synthetic patients
+(gender, age band, one of 16 real Indian states/UTs) and 1&ndash;3 encounters each, spread over a
+trailing 12 months, each attached to a **real** NAMASTE code drawn from the actual `nam`/`nsm`/`num`
+tables &mdash; the terminology is genuine, the patient behind it is not.
+
+```bash
+python scripts/generate_synthetic_population.py --count 2200 --seed 42
+```
+
+This is kept structurally separate from `app/analytics.py` (the real governance dashboard) on every
+level, on purpose:
+
+- **Separate tables** (`synthetic_patients`, `synthetic_encounters`), each with an `is_synthetic`
+  column baked into the schema itself &mdash; a raw SQL query against the database makes the
+  fabrication status obvious, not just the API.
+- **Separate module, separate router, separate page.** `app/population_analytics.py` never touches
+  `app/analytics.py`, and vice versa.
+- **A test that enforces the boundary in both directions**: `tests/test_population_analytics.py`
+  asserts the real dashboard's response never mentions "synthetic" in any form, and
+  `tests/test_analytics.py` already asserted the real dashboard carries no fabricated encounter/patient
+  figure at all. If either module starts leaking into the other, a test fails.
+- **An unmissable UI treatment** &mdash; a striped amber banner reading "100% SYNTHETIC DEMONSTRATION
+  DATA &mdash; NO REAL PATIENTS" that cannot be mistaken for the real Analytics page's dark, sober
+  honesty banner.
+
+Say out loud, every time this page comes up in a demo: *"this is illustrative, not real usage — the
+Analytics page next to it is the real one."*
 
 ## 🔧 Advanced Usage
 

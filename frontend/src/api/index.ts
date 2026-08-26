@@ -572,3 +572,27 @@ export const getApiScopes = () =>
 
 export const getCapabilityStatement = () =>
   apiClient.get<Record<string, unknown>>('/api/v1/CapabilityStatement').then((r) => r.data);
+
+// ---- Population Health Demo (SYNTHETIC data — see backend disclaimer) ----
+
+export interface PopulationDemoPayload {
+  is_synthetic: true;
+  available: boolean;
+  disclaimer: string;
+  message?: string;
+  overview?: {
+    total_patients: number;
+    total_encounters: number;
+    date_range: { from: string | null; to: string | null };
+    regions_covered: number;
+  };
+  by_gender?: Array<{ gender: string; n: number }>;
+  by_age_band?: Array<{ age_band: string; n: number }>;
+  by_region?: Array<{ region: string; patients: number; encounters: number }>;
+  by_month?: Array<{ month: string; n: number }>;
+  by_tradition?: Array<{ tradition: string; n: number }>;
+  gender_by_region?: Array<Record<string, string | number>>;
+}
+
+export const getPopulationDemo = () =>
+  apiClient.get<PopulationDemoPayload>('/api/analytics/population-demo').then((r) => r.data);
