@@ -7,13 +7,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from app import conceptmap, api, ai_router, governance, governance_router, fhir_extra, auth, audit, problem_list, consent, who_sync, who_router, analytics_router, clinical_text_router, apikeys, apikey_router, v1_router, population_analytics_router, terminology_simulator, terminology_simulator_router
+from app import conceptmap, api, ai_router, governance, governance_router, fhir_extra, auth, audit, problem_list, consent, who_sync, who_router, analytics_router, clinical_text_router, apikeys, apikey_router, v1_router, population_analytics_router, terminology_simulator, terminology_simulator_router, terminology_firewall
 
 governance.ensure_schema()
 audit.ensure_schema()
 who_sync.ensure_schema()
 apikeys.ensure_schema()
 terminology_simulator.ensure_schema()
+terminology_firewall.ensure_schema()
 
 app = FastAPI(
     title="Ayush ICD-11 Terminology Microservice",

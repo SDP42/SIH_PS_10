@@ -33,6 +33,7 @@ export const translations: Record<string, Dict> = {
   nav_fhir: { en: 'FHIR Workspace', hi: 'FHIR कार्यक्षेत्र', mr: 'FHIR कार्यक्षेत्र', gu: 'FHIR વર્કસ્પેસ' },
   nav_who_sync: { en: 'WHO Sync', hi: 'WHO सिंक', mr: 'WHO सिंक', gu: 'WHO સિંક' },
   nav_what_if: { en: 'What-If Simulator', hi: 'व्हाट-इफ सिम्युलेटर', mr: 'व्हॉट-इफ सिम्युलेटर', gu: 'વોટ-ઇફ સિમ્યુલેટર' },
+  nav_firewall: { en: 'Terminology Firewall', hi: 'टर्मिनोलॉजी फ़ायरवॉल', mr: 'टर्मिनॉलॉजी फायरवॉल', gu: 'ટર્મિનોલોજી ફાયરવોલ' },
   nav_analytics: { en: 'Analytics', hi: 'विश्लेषण', mr: 'विश्लेषण', gu: 'વિશ્લેષણ' },
   nav_developer_portal: { en: 'Developer Portal', hi: 'डेवलपर पोर्टल', mr: 'डेव्हलपर पोर्टल', gu: 'ડેવલપર પોર્ટલ' },
   nav_population_demo: { en: 'Population Health Demo', hi: 'जनसंख्या स्वास्थ्य डेमो', mr: 'लोकसंख्या आरोग्य डेमो', gu: 'વસ્તી આરોગ્ય ડેમો' },

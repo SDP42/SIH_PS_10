@@ -132,3 +132,42 @@ def test_real_governance_dashboard_is_not_contaminated_by_synthetic_data():
         assert banned not in dumped
     # The real dashboard's own honesty note must still be exactly as strict.
     assert "no patient or encounter volume shown anywhere on this page" in body["data_honesty_note"]
+
+
+def test_top_conditions_national_returns_real_terms_ranked_by_encounters():
+    rows = pop.top_conditions_national(5)
+    assert len(rows) <= 5
+    assert all(rows[i]["encounters"] >= rows[i + 1]["encounters"] for i in range(len(rows) - 1))
+    for r in rows:
+        assert r["display"] != r["namaste_code"], "expected a real term, not a bare code fallback"
+
+
+def test_top_conditions_by_region_respects_limit_per_region():
+    rows = pop.top_conditions_by_region(limit_per_region=3)
+    assert rows
+    for r in rows:
+        assert len(r["top_conditions"]) <= 3
+        encounters = [c["encounters"] for c in r["top_conditions"]]
+        assert encounters == sorted(encounters, reverse=True)
+
+
+def test_full_payload_includes_condition_breakdowns():
+    resp = client.get("/api/analytics/population-demo")
+    body = resp.json()
+    assert "top_conditions_national" in body
+    assert "top_conditions_by_region" in body
+    assert len(body["top_conditions_national"]) > 0
+
+
+def test_condition_codes_are_real_namaste_codes_not_fabricated():
+    """The disease/code identity itself must be real data, only the encounter count is synthetic."""
+    import sqlite3
+    rows = pop.top_conditions_national(10)
+    conn = sqlite3.connect(pop.DB_PATH)
+    cur = conn.cursor()
+    table_by_tradition = {"Ayurveda": ("nam", "namc_code"), "Siddha": ("nsm", "namc_code"), "Unani": ("num", "numc_code")}
+    for r in rows:
+        table, code_col = table_by_tradition[r["tradition"]]
+        cur.execute(f"SELECT 1 FROM {table} WHERE {code_col} = ? LIMIT 1", (r["namaste_code"],))
+        assert cur.fetchone() is not None
+    conn.close()

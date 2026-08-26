@@ -117,3 +117,36 @@ def validate_code(
             {"name": "message", "valueString": f"Code '{code}' was not found in {system}."},
         ],
     }
+
+
+# ── Terminology Firewall (Phase 3C) ────────────────────────────────────────
+@router.post("/firewall/check")
+def firewall_check(
+    bundle: Dict[str, Any] = Body(...),
+    key: Dict[str, Any] = Depends(require_api_key("bundle:write")),
+):
+    """
+    Composes existing code-existence, WHO-drift, and dual-coding translate
+    logic into one accept/reject/review verdict for an incoming FHIR Bundle
+    — a quality gateway an EMR can call before trusting a coded Condition.
+    Never modifies the Bundle, concept_map, or review_queue; a REJECTED or
+    REVIEW_REQUIRED verdict is advisory, not a mutation.
+    """
+    from app import terminology_firewall as firewall
+
+    result = firewall.check_bundle(bundle)
+    bundle_ref = bundle.get("id") if isinstance(bundle, dict) else None
+    firewall.record_decision(bundle_ref, result, decided_by=f"api_key:{key['key_prefix']}")
+
+    outcome = operation_outcome(
+        "information" if result["verdict"] == "ACCEPTED" else "warning" if result["verdict"] == "REVIEW_REQUIRED" else "error",
+        "processing",
+        "; ".join(result["reasons"]) if result["reasons"] else "All checked Conditions passed the terminology firewall.",
+    )
+    return {**result, "operationOutcome": outcome}
+
+
+@router.get("/firewall/history")
+def firewall_history(limit: int = Query(20, ge=1, le=100)):
+    from app import terminology_firewall as firewall
+    return {"decisions": firewall.history(limit)}

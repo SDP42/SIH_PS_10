@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient, { BASE_URL } from './client';
 
 export interface Stats {
   namaste_concepts: number;
@@ -575,6 +575,13 @@ export const getCapabilityStatement = () =>
 
 // ---- Population Health Demo (SYNTHETIC data — see backend disclaimer) ----
 
+export interface ConditionCount {
+  tradition: string;
+  namaste_code: string;
+  display: string;
+  encounters: number;
+}
+
 export interface PopulationDemoPayload {
   is_synthetic: true;
   available: boolean;
@@ -592,6 +599,8 @@ export interface PopulationDemoPayload {
   by_month?: Array<{ month: string; n: number }>;
   by_tradition?: Array<{ tradition: string; n: number }>;
   gender_by_region?: Array<Record<string, string | number>>;
+  top_conditions_national?: ConditionCount[];
+  top_conditions_by_region?: Array<{ region: string; top_conditions: ConditionCount[] }>;
 }
 
 export const getPopulationDemo = () =>
@@ -657,3 +666,24 @@ export interface AuditVerifyResult {
 
 export const verifyAuditChain = () =>
   apiClient.get<AuditVerifyResult>('/api/audit/verify').then((r) => r.data);
+
+// ---- Terminology Firewall (Phase 3C) ----
+
+export interface FirewallResult {
+  verdict: 'ACCEPTED' | 'REVIEW_REQUIRED' | 'REJECTED';
+  checked_conditions: number;
+  results: Array<{ resource_id: string | null; verdict: string; issues: string[]; source_code: string | null }>;
+  reasons: string[];
+  disclaimer: string;
+  operationOutcome: Record<string, unknown>;
+}
+
+export const checkFirewall = (bundle: Record<string, unknown>, apiKey: string) =>
+  fetch(`${BASE_URL}/api/v1/firewall/check`, {
+    method: 'POST',
+    headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify(bundle),
+  }).then((r) => r.json() as Promise<FirewallResult>);
+
+export const getFirewallHistory = () =>
+  apiClient.get<{ decisions: any[] }>('/api/v1/firewall/history').then((r) => r.data);

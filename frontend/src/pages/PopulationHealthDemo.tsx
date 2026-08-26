@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Users, FlaskConical, MapPin, Calendar, PieChart } from 'lucide-react';
+import { Users, FlaskConical, MapPin, Calendar, PieChart, ListOrdered } from 'lucide-react';
 import { getPopulationDemo } from '../api';
 
 function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
@@ -152,7 +152,36 @@ export default function PopulationHealthDemo() {
             )}
           </div>
 
-          <div className="card">
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div className="section-header">
+              <div>
+                <div className="section-title"><ListOrdered size={14} style={{ verticalAlign: -2, marginRight: 5 }} />Most common conditions, nationally</div>
+                <div className="section-subtitle">
+                  The codes themselves are real NAMASTE terminology — only the encounter volume behind
+                  them is synthetic. This is the ranking a government analyst would use to spot where
+                  to focus, at realistic scale.
+                </div>
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>#</th><th>Tradition</th><th>Code</th><th>Condition</th><th>Encounters</th></tr></thead>
+                <tbody>
+                  {data.top_conditions_national?.map((c, i) => (
+                    <tr key={`${c.tradition}-${c.namaste_code}`}>
+                      <td className="num">{i + 1}</td>
+                      <td><span className="badge" style={{ background: 'transparent', color: TRADITION_COLORS[c.tradition], border: `1px solid ${TRADITION_COLORS[c.tradition]}` }}>{c.tradition}</span></td>
+                      <td><span className="td-code">{c.namaste_code}</span></td>
+                      <td style={{ fontSize: 12.5 }}>{c.display}</td>
+                      <td className="num">{c.encounters.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 20 }}>
             <div className="section-header">
               <div>
                 <div className="section-title"><MapPin size={14} style={{ verticalAlign: -2, marginRight: 5 }} />By region</div>
@@ -168,6 +197,35 @@ export default function PopulationHealthDemo() {
                       <td>{r.region}</td>
                       <td className="num">{r.patients.toLocaleString()}</td>
                       <td className="num">{r.encounters.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="section-header">
+              <div>
+                <div className="section-title"><ListOrdered size={14} style={{ verticalAlign: -2, marginRight: 5 }} />Leading condition, by region</div>
+                <div className="section-subtitle">
+                  What's most common where — the drill-down a state health department would actually
+                  want, so outreach can be targeted region by region.
+                </div>
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Region</th><th>Top condition</th><th>Encounters</th><th>2nd &amp; 3rd</th></tr></thead>
+                <tbody>
+                  {data.top_conditions_by_region?.map((r) => (
+                    <tr key={r.region}>
+                      <td style={{ fontWeight: 600 }}>{r.region}</td>
+                      <td style={{ fontSize: 12.5 }}>{r.top_conditions[0]?.display || '—'}</td>
+                      <td className="num">{r.top_conditions[0]?.encounters ?? '—'}</td>
+                      <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {r.top_conditions.slice(1).map((c) => c.display).join('; ') || '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

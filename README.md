@@ -98,6 +98,8 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | 🧪 **Population Health Demo** | 2,200 synthetic patients across gender/region/time, structurally isolated from — and never mixed into — the real governance analytics |
 | 🔀 **Terminology What-If Simulator** | Diffs any two real WHO ICD-11 releases and reports exactly which curated mappings would break or go ambiguous — before the release ships |
 | ⛓️ **Tamper-Evident Audit Ledger** | Hash-chains the real audit trail — editing any row directly in the database is caught, and the exact row is named |
+| 🛡️ **Terminology Firewall** | Composes existing validation logic into one accept/reject/review gateway verdict for incoming FHIR Bundles |
+| 📍 **Regional Disease Intelligence** | Population Health Demo now ranks real NAMASTE conditions nationally and per-region — the exact drill-down a government analyst needs |
 
 ---
 
@@ -956,6 +958,40 @@ The Analytics page carries a **"Verify audit integrity"** chip (Governance Activ
 this endpoint live and shows either a green "Audit chain verified (N rows)" badge or a red
 "TAMPERED — broken at row #N" badge &mdash; the single most effective thing to do live in front of
 judges: hand-edit one row in a DB browser, then click the chip and watch it get caught.
+
+## 🛡️ Terminology Firewall (Phase 3C)
+
+"A clinical terminology quality gateway for existing EMRs" &mdash; positioned exactly as the platform
+strategy doc's Phase 3C. Deliberately not a new validation engine: every check is a call into logic
+that already exists and is already tested (code-existence, the WHO drift registry, dual-coding
+translate). The firewall's only contribution is composing those into one verdict an EMR integration
+can act on.
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/firewall/check \
+  -H "X-API-Key: $SECRET" -H "Content-Type: application/json" \
+  -d '{"resourceType":"Bundle","type":"collection","entry":[{"resource":{
+        "resourceType":"Condition","id":"c1",
+        "clinicalStatus":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","code":"active"}]},
+        "subject":{"reference":"Patient/demo"},
+        "code":{"coding":[{"system":"http://namaste.terminology/CodeSystem/ayurveda-morbidity","code":"AA-1"}]}}}]}' \
+  | python3 -m json.tool
+```
+
+Three verdicts, never a fourth invented one: **ACCEPTED** (code exists, current, resolves to a
+validated mapping), **REVIEW_REQUIRED** (code exists but the mapping is AI-uncertain or the target has
+drifted per WHO Sync), **REJECTED** (structurally invalid input, or the code doesn't exist at all).
+Requires an API key with `bundle:write` scope (`fhir_integration` or `admin`); never modifies the
+Bundle, `concept_map`, or `review_queue` &mdash; a check is advisory, not a mutation. The
+**Terminology Firewall** page (`/terminology-firewall`) runs this live in the browser.
+
+## 📍 Regional Disease Intelligence (Population Health Demo extension)
+
+Extends the synthetic Population Health Demo with the drill-down a government analyst actually asked
+for: which condition is most common, nationally and region-by-region. The **codes and their real
+NAMASTE terms are genuine terminology data** &mdash; only the encounter volume behind them is
+synthetic, same discipline as the rest of that page. `GET /api/analytics/population-demo` now includes
+`top_conditions_national` and `top_conditions_by_region`, both rendered as new tables on the page.
 
 ## 🔧 Advanced Usage
 

@@ -20,21 +20,27 @@ from app.main import app
 client = TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def _heal_chain_after_each_test():
-    """
-    Several tests here deliberately tamper with / delete audit_log rows to
-    prove verify_chain() catches it. Since the test database is shared
-    across this whole file (and other test files reuse the same copy), heal
-    the chain back to a self-consistent state after each test so tampering
-    in one test never leaks into the next.
-    """
-    yield
+def _heal_chain():
     conn = sqlite3.connect(audit.DB_PATH)
     conn.execute("UPDATE audit_log SET row_hash = NULL, prev_hash = NULL")
     conn.commit()
     conn.close()
     audit.ensure_schema()
+
+
+@pytest.fixture(autouse=True)
+def _heal_chain_around_each_test():
+    """
+    Several tests here deliberately tamper with / delete audit_log rows to
+    prove verify_chain() catches it. The test database is shared across this
+    whole file *and every other test file in the same pytest run* — healing
+    only after each test left the very first test in this file exposed to
+    whatever raw-write state other files' fixtures left behind before this
+    file even started. Healing both before and after closes that gap.
+    """
+    _heal_chain()
+    yield
+    _heal_chain()
 
 
 def _row_count():

@@ -138,6 +138,88 @@ def by_tradition() -> List[Dict[str, Any]]:
         conn.close()
 
 
+_TRADITION_TERM_TABLE = {
+    "Ayurveda": ("nam", "namc_code", "namc_term", "name_english"),
+    "Siddha": ("nsm", "namc_code", "namc_term", None),
+    "Unani": ("num", "numc_code", "numc_term", None),
+}
+
+
+def _term_display(cur, tradition: str, code: str) -> str:
+    table, code_col, term_col, eng_col = _TRADITION_TERM_TABLE[tradition]
+    select_cols = f"{term_col}" + (f", {eng_col}" if eng_col else "")
+    cur.execute(f"SELECT {select_cols} FROM {table} WHERE {code_col} = ? LIMIT 1", (code,))
+    row = cur.fetchone()
+    if not row:
+        return code
+    if eng_col and row[eng_col]:
+        return f"{row[term_col]} ({row[eng_col]})"
+    return row[term_col] or code
+
+
+def top_conditions_national(limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    The national ranking a Ministry dashboard actually wants: which NAMASTE
+    codes show up most often across the whole synthetic population, with
+    the real term displayed (the code is real NAMASTE data; only the
+    encounter volume behind it is synthetic).
+    """
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """SELECT tradition, namaste_code, COUNT(*) AS n
+               FROM synthetic_encounters GROUP BY tradition, namaste_code
+               ORDER BY n DESC LIMIT ?""",
+            (limit,),
+        )
+        rows = cur.fetchall()
+        return [
+            {
+                "tradition": r["tradition"],
+                "namaste_code": r["namaste_code"],
+                "display": _term_display(cur, r["tradition"], r["namaste_code"]),
+                "encounters": r["n"],
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def top_conditions_by_region(limit_per_region: int = 3) -> List[Dict[str, Any]]:
+    """
+    Answers "which condition is most common in which region" — the
+    region-level drill-down a government analyst would use to target
+    outreach or resource allocation. Still 100% synthetic patient/encounter
+    volume; the codes and their real terms are genuine NAMASTE data.
+    """
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """SELECT p.region AS region, e.tradition AS tradition, e.namaste_code AS namaste_code, COUNT(*) AS n
+               FROM synthetic_encounters e JOIN synthetic_patients p ON p.id = e.patient_id
+               GROUP BY p.region, e.tradition, e.namaste_code
+               ORDER BY p.region, n DESC"""
+        )
+        rows = cur.fetchall()
+        by_region: Dict[str, List[Dict[str, Any]]] = {}
+        for r in rows:
+            bucket = by_region.setdefault(r["region"], [])
+            if len(bucket) >= limit_per_region:
+                continue
+            bucket.append({
+                "tradition": r["tradition"],
+                "namaste_code": r["namaste_code"],
+                "display": _term_display(cur, r["tradition"], r["namaste_code"]),
+                "encounters": r["n"],
+            })
+        return [{"region": region, "top_conditions": conditions} for region, conditions in by_region.items()]
+    finally:
+        conn.close()
+
+
 def gender_by_region() -> List[Dict[str, Any]]:
     """Cross-tab: gender split within each region — a real ask for a government demographic view."""
     conn = _conn()
@@ -175,4 +257,6 @@ def full_demo_payload() -> Dict[str, Any]:
         "by_month": by_month(),
         "by_tradition": by_tradition(),
         "gender_by_region": gender_by_region(),
+        "top_conditions_national": top_conditions_national(10),
+        "top_conditions_by_region": top_conditions_by_region(3),
     }
