@@ -63,6 +63,7 @@ db.sqlite3-journal
 
 # Ignore SQLite database files
 db/*.db
+db/*.db-journal
 *.sqlite3
 
 # Ignore data directory having csv files
