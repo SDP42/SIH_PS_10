@@ -99,6 +99,7 @@ A **full-stack FHIR R4-compliant terminology microservice**:
 | 🔀 **Terminology What-If Simulator** | Diffs any two real WHO ICD-11 releases and reports exactly which curated mappings would break or go ambiguous — before the release ships |
 | ⛓️ **Tamper-Evident Audit Ledger** | Hash-chains the real audit trail — editing any row directly in the database is caught, and the exact row is named |
 | 🛡️ **Terminology Firewall** | Composes existing validation logic into one accept/reject/review gateway verdict for incoming FHIR Bundles |
+| 🎙️ **Voice Terminology Assistant** | Browser-native speech in/out (no external voice API) routed to the existing engines — answers project questions only from a controlled knowledge base, never invents an answer |
 | 📍 **Regional Disease Intelligence** | Population Health Demo now ranks real NAMASTE conditions nationally and per-region — the exact drill-down a government analyst needs |
 
 ---
@@ -992,6 +993,51 @@ for: which condition is most common, nationally and region-by-region. The **code
 NAMASTE terms are genuine terminology data** &mdash; only the encounter volume behind them is
 synthetic, same discipline as the rest of that page. `GET /api/analytics/population-demo` now includes
 `top_conditions_national` and `top_conditions_by_region`, both rendered as new tables on the page.
+
+## 🎙️ Voice / Text Clinical Terminology Assistant (Phase 3)
+
+A floating assistant available on every page. **Voice and typing are two input methods for one
+engine** &mdash; speech-to-text and text-to-speech both run in the browser via the Web Speech API, so
+there is no external speech provider, no audio upload, and no paid API key anywhere in this pipeline.
+Where the browser has no speech support the panel says so plainly and typing continues to work.
+
+```bash
+curl -s -X POST http://localhost:8000/api/v1/assistant/ask \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What is dual coding?"}' | python3 -m json.tool
+```
+
+**It is a routing layer, not a new engine.** `app/assistant.py` contains no terminology logic of its
+own &mdash; it detects intent and delegates to the components that already exist and are already
+tested (`app.api.search_concepts`, `app.fhir_extra.translate`, `app.clinical_nlp.build_candidates`,
+the `$validate-code` tables, and `app.problem_list`). The assistant therefore cannot disagree with
+what the rest of the platform would return for the same query.
+
+**Two answer sources, kept strictly apart:**
+
+- **Project / FAQ questions** are answered *only* from `data/knowledge_base.json`, returned verbatim.
+  The assistant never paraphrases, never composes a new explanation, and has no generative fallback.
+  Below a confidence floor it declines &mdash; *"I couldn't find a reliable answer in my knowledge
+  base"* &mdash; and lists the topics it does cover. Non-hallucination here is structural, not a prompt
+  instruction. Edit the JSON file (question / answer / category / keywords) to extend it; no code
+  changes, and `POST /api/v1/assistant/reload-knowledge-base` picks up edits without a restart.
+- **Terminology questions** are answered *only* by calling the existing engines above.
+
+**Clinical safety.** A symptom is never promoted to a diagnosis &mdash; the assistant inherits
+`app/clinical_nlp.py`'s guarantee by delegating to it. Asked about a patient with a cough it reports
+the symptom, states plainly that it cannot infer a diagnosis, and searches the terminologies for the
+symptom only. Negated symptoms ("no fever") are reported as absent and never searched.
+
+**Confirmation gate.** Any request that would write clinical data (*"add this to the problem list"*)
+returns a prepared FHIR Condition preview plus `requires_confirmation: true` &mdash; nothing is saved.
+Execution goes through a separate authenticated `POST /api/v1/assistant/confirm`, so a single spoken
+utterance can never cause a write, and the confirmed action is stamped into the audit trail.
+
+**Phonetic fallback for spoken terms.** NAMASTE terms are stored in IAST transliteration
+(`gRudhrasI`); speech-to-text produces `"Gridhrasi"`, which shares no searchable prefix. When the
+primary search returns nothing, the assistant reduces both sides to a consonant skeleton to find
+candidates, then *asks the user to confirm* rather than silently assuming the match. This is query
+normalisation feeding the existing search &mdash; not a second search engine.
 
 ## 🔧 Advanced Usage
 

@@ -40,8 +40,9 @@ import app.v1_router as _v1_router
 import app.population_analytics as _population_analytics
 import app.terminology_simulator as _terminology_simulator
 import app.terminology_firewall as _terminology_firewall
+import app.assistant as _assistant
 
-for _mod in (_api, _conceptmap, _ai_mapping, _governance, _fhir_extra, _audit, _who_sync, _analytics, _apikeys, _v1_router, _population_analytics, _terminology_simulator, _terminology_firewall):
+for _mod in (_api, _conceptmap, _ai_mapping, _governance, _fhir_extra, _audit, _who_sync, _analytics, _apikeys, _v1_router, _population_analytics, _terminology_simulator, _terminology_firewall, _assistant):
     _mod.DB_PATH = TEST_DB_PATH
 
 _governance.ensure_schema()

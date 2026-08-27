@@ -1,0 +1,107 @@
+{
+  "_comment": "Controlled answer set for the voice/text assistant. Edit this file to add or change answers — no application code needs to change. Each entry: question (the canonical phrasing), answer (returned verbatim — the assistant never paraphrases or invents), category, and keywords (extra matching terms, lowercase).",
+  "_schema": {
+    "question": "string — canonical phrasing, used for exact matching",
+    "answer": "string — returned verbatim to the user",
+    "category": "string — project | terminology | fhir | api | governance | safety",
+    "keywords": "string[] — additional lowercase terms that should match this entry"
+  },
+  "entries": [
+    {
+      "question": "What is NAMASTE?",
+      "answer": "NAMASTE is the National AYUSH Morbidity and Standardized Terminologies Electronic portal. It is India's standardised coding system for traditional medicine, covering the diagnostic vocabulary of Ayurveda, Siddha and Unani.",
+      "category": "project",
+      "keywords": ["namaste", "national ayush morbidity", "standardized terminology", "ayush terminology"]
+    },
+    {
+      "question": "What is ICD-11?",
+      "answer": "ICD-11 is the World Health Organization's International Classification of Diseases, eleventh revision. It is the vocabulary that underpins global health statistics, hospital records and insurance processing worldwide.",
+      "category": "terminology",
+      "keywords": ["icd 11", "icd-11", "international classification of diseases", "who classification"]
+    },
+    {
+      "question": "What is TM2?",
+      "answer": "TM2 is Traditional Medicine Module 2, Chapter 26 of ICD-11. It was created by the World Health Organization so that traditional medicine diagnoses could be recorded within the international classification for the first time.",
+      "category": "terminology",
+      "keywords": ["tm2", "tm 2", "traditional medicine module", "chapter 26"]
+    },
+    {
+      "question": "What is dual coding?",
+      "answer": "Dual coding means recording a single clinical concept in two classifications at once. In this platform every NAMASTE code is resolved independently into both ICD-11 TM2 and ICD-11 Biomedicine, so a record carries the traditional framing and the closest biomedical framing together rather than losing one of them.",
+      "category": "terminology",
+      "keywords": ["dual coding", "double coding", "two codes", "both codes"]
+    },
+    {
+      "question": "What is FHIR?",
+      "answer": "FHIR stands for Fast Healthcare Interoperability Resources. It is the HL7 standard that defines how clinical data is structured and exchanged between health systems.",
+      "category": "fhir",
+      "keywords": ["fhir", "hl7", "interoperability resources"]
+    },
+    {
+      "question": "Why are we using FHIR R4?",
+      "answer": "FHIR R4 is the release specified by India's Electronic Health Record Standards, and it is what hospital systems and EMR vendors actually implement today. Emitting genuine R4 resources means an existing EMR can consume this platform's output without custom adaptation.",
+      "category": "fhir",
+      "keywords": ["fhir r4", "why fhir", "r4", "ehr standards"]
+    },
+    {
+      "question": "What does this project do?",
+      "answer": "It is a terminology bridge between India's NAMASTE AYUSH codes and the World Health Organization's ICD-11. It resolves any NAMASTE code into both ICD-11 TM2 and ICD-11 Biomedicine, keeps itself synchronised against WHO's live servers, and routes every uncertain mapping to a human expert for confirmation.",
+      "category": "project",
+      "keywords": ["what does this do", "what is this project", "purpose of the project", "what is this platform", "what is this system"]
+    },
+    {
+      "question": "What is the purpose of the system?",
+      "answer": "To make traditional medicine statistically visible to the modern health system, so an AYUSH encounter can be reported to the WHO, reimbursed by an insurer and studied by researchers on the same footing as a biomedical encounter, without asking practitioners to change how they already work.",
+      "category": "project",
+      "keywords": ["purpose", "why does this exist", "goal of the system", "objective"]
+    },
+    {
+      "question": "How does the terminology mapping work?",
+      "answer": "Two engines propose mappings independently. A rule-based matcher produced the original curated registry, and a sentence-embedding engine ranks candidates by semantic and lexical similarity. The result is classified into one of four outcomes, and anything that is not a confident match is routed to a human reviewer rather than being accepted automatically.",
+      "category": "governance",
+      "keywords": ["how does mapping work", "mapping engine", "how are codes mapped", "how does it map"]
+    },
+    {
+      "question": "What happens when the system is not confident about a mapping?",
+      "answer": "It returns NO VALIDATED EQUIVALENT and refuses to guess. That is a deliberate design decision: in a clinical context a confidently wrong mapping is more dangerous than an admitted gap. Uncertain cases are placed in the expert review queue.",
+      "category": "safety",
+      "keywords": ["not confident", "no validated equivalent", "uncertain", "refuse to guess", "low confidence"]
+    },
+    {
+      "question": "How does the API work?",
+      "answer": "External systems integrate through a versioned API surface under slash api slash v1. A client is issued an API key with explicit scopes and a rate limit, then calls endpoints for terminology search, translation, code validation and record checking. A capability statement is available without a key so a client can discover what the server supports before credentialing.",
+      "category": "api",
+      "keywords": ["how does the api work", "api integration", "api key", "integrate", "emr integration"]
+    },
+    {
+      "question": "How does WHO synchronisation work?",
+      "answer": "The platform synchronises against WHO's live infrastructure through two independent channels: a credential-free comparison against WHO's published release files, and an authenticated ICD-API path for per-code detail. It detects codes that WHO has retitled or retired and raises them for human review rather than rewriting mappings automatically.",
+      "category": "governance",
+      "keywords": ["who sync", "who synchronisation", "who synchronization", "sync with who", "keep up to date", "drift"]
+    },
+    {
+      "question": "Who reviews the mappings?",
+      "answer": "A human expert reviewer. Every AI suggestion in the needs-context or expert-review tier is queued for a named reviewer who can approve, reject or request more information. Approving writes a new record rather than overwriting the previous one, so the decision history stays intact.",
+      "category": "governance",
+      "keywords": ["who reviews", "human review", "expert review", "governance queue", "who approves"]
+    },
+    {
+      "question": "Can this system diagnose a patient?",
+      "answer": "No. The assistant identifies symptoms and suggests standardised terminology candidates only. It never infers a diagnosis from symptoms, and a clinician must confirm any coding before it enters a record. This is a clinical safety boundary, not a limitation that will be removed later.",
+      "category": "safety",
+      "keywords": ["can it diagnose", "does it diagnose", "diagnosis", "is it a diagnostic tool", "clinical safety"]
+    },
+    {
+      "question": "What languages and scripts are supported?",
+      "answer": "Terminology search works in Devanagari for Ayurveda, Tamil for Siddha and Arabic for Unani, alongside English and transliterated forms. The interface itself is available in English, Hindi, Marathi and Gujarati.",
+      "category": "project",
+      "keywords": ["languages", "scripts", "devanagari", "tamil", "arabic", "hindi", "multilingual", "native script"]
+    },
+    {
+      "question": "What is an audit trail?",
+      "answer": "Every governance decision, WHO synchronisation, API key action and record upload is written to an audit log whose entries are hash-chained to each other. If any entry is altered directly in the database, a verification endpoint detects it and identifies the exact record that changed.",
+      "category": "governance",
+      "keywords": ["audit", "audit trail", "audit log", "tamper", "hash chain", "traceability"]
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import { getStats } from '../api';
 import { useDemoAuth } from '../auth/DemoAuthContext';
 import { useLanguage } from '../i18n/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
+import VoiceAssistant from './VoiceAssistant';
 
 const NAV = [
   { to: '/overview', icon: LayoutDashboard, key: 'nav_overview' },
@@ -117,6 +118,9 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {/* Floating on every page — voice and text are two inputs to one engine */}
+      <VoiceAssistant />
     </div>
   );
 }

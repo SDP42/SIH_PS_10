@@ -687,3 +687,46 @@ export const checkFirewall = (bundle: Record<string, unknown>, apiKey: string) =
 
 export const getFirewallHistory = () =>
   apiClient.get<{ decisions: any[] }>('/api/v1/firewall/history').then((r) => r.data);
+
+// ---- Voice / text clinical terminology assistant (Phase 3) ----
+
+export type AssistantIntent =
+  | 'PROJECT_FAQ' | 'TERMINOLOGY_SEARCH' | 'TRANSLATE_MAPPING'
+  | 'VALIDATE_CODE' | 'CLINICAL_TEXT' | 'CREATE_CONDITION' | 'UNKNOWN';
+
+export interface AssistantPendingAction {
+  action: string;
+  namaste_code?: string;
+  source_system?: string;
+}
+
+export interface AssistantReply {
+  intent: AssistantIntent;
+  answer: string;
+  confidence: number;
+  suggestion?: string;
+  matched_question?: string;
+  category?: string;
+  data: Record<string, any>;
+  requires_confirmation: boolean;
+  pending_action?: AssistantPendingAction | null;
+  source: 'knowledge_base' | 'terminology_engine' | 'assistant';
+}
+
+export interface AssistantCapabilities {
+  knowledge_base_entries: number;
+  categories: string[];
+  example_questions: string[];
+  example_commands: string[];
+  intents: string[];
+  safety_note: string;
+}
+
+export const askAssistant = (text: string, context_code?: string) =>
+  apiClient.post<AssistantReply>('/api/v1/assistant/ask', { text, context_code }).then((r) => r.data);
+
+export const confirmAssistantAction = (action: AssistantPendingAction) =>
+  apiClient.post<{ executed: boolean; answer: string; data?: any }>('/api/v1/assistant/confirm', { action }).then((r) => r.data);
+
+export const getAssistantCapabilities = () =>
+  apiClient.get<AssistantCapabilities>('/api/v1/assistant/capabilities').then((r) => r.data);
