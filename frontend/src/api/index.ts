@@ -678,12 +678,31 @@ export interface FirewallResult {
   operationOutcome: Record<string, unknown>;
 }
 
-export const checkFirewall = (bundle: Record<string, unknown>, apiKey: string) =>
-  fetch(`${BASE_URL}/api/v1/firewall/check`, {
+export const checkFirewall = async (bundle: Record<string, unknown>, apiKey: string): Promise<FirewallResult> => {
+  const res = await fetch(`${BASE_URL}/api/v1/firewall/check`, {
     method: 'POST',
     headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify(bundle),
-  }).then((r) => r.json() as Promise<FirewallResult>);
+  });
+  const body = await res.json().catch(() => null);
+
+  // fetch() does not reject on 4xx/5xx. Without this check an auth failure
+  // returns an OperationOutcome body with no `results` array, which the
+  // caller then tries to map over — crashing the page instead of showing
+  // the error. Surface it as a thrown, readable message instead.
+  if (!res.ok) {
+    const diagnostics = body?.detail?.issue?.[0]?.diagnostics || body?.detail?.message;
+    throw new Error(
+      diagnostics ||
+        (res.status === 401
+          ? 'That API key was not recognised.'
+          : res.status === 403
+          ? 'That key does not have the bundle:write scope.'
+          : `Request failed (HTTP ${res.status}).`)
+    );
+  }
+  return body as FirewallResult;
+};
 
 export const getFirewallHistory = () =>
   apiClient.get<{ decisions: any[] }>('/api/v1/firewall/history').then((r) => r.data);

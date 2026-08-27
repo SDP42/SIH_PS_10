@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getConceptMapList, getFhirConceptMap, translateConcept, uploadBundle, buildProblemListEntry } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 import { Search, Code2, Copy, CheckCircle, Zap, UploadCloud, FilePlus2 } from 'lucide-react';
 
 // apiClient's response interceptor (see api/client.ts) rejects with
@@ -165,6 +166,7 @@ function TranslateTester() {
 }
 
 export default function FhirWorkspace() {
+  const { t } = useLanguage();
   const [tab, setTab] = useState<'browse' | 'translate' | 'bundle' | 'problemlist'>('browse');
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -196,8 +198,8 @@ export default function FhirWorkspace() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">FHIR Workspace</h1>
-        <p className="page-desc">Browse FHIR R4 ConceptMap resources generated from the NAMASTE-ICD-11 mapping database.</p>
+        <h1 className="page-title">{t('page_fhir_title')}</h1>
+        <p className="page-desc">{t('page_fhir_desc')}</p>
       </div>
 
       <div className="tabs">

@@ -133,11 +133,6 @@ export default function Analytics() {
         </p>
       </div>
 
-      <div className="demo-banner" style={{ marginBottom: 18, alignItems: 'flex-start' }}>
-        <Info size={14} style={{ flexShrink: 0, marginTop: 3 }} />
-        <span>{data.data_honesty_note}</span>
-      </div>
-
       <div className="grid-4" style={{ marginBottom: 18 }}>
         <Stat
           label="Curated mappings"

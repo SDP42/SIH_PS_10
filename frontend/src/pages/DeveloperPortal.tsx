@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRound, Copy, RefreshCw, Ban, PlayCircle, Terminal, ShieldCheck } from 'lucide-react';
 import {
@@ -190,6 +191,7 @@ function KeyRow({ k, onChanged }: { k: ApiKeyMeta; onChanged: () => void }) {
 }
 
 export default function DeveloperPortal() {
+  const { t } = useLanguage();
   const qc = useQueryClient();
   const [latestKey, setLatestKey] = useState('');
 
@@ -199,12 +201,8 @@ export default function DeveloperPortal() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title"><KeyRound size={20} style={{ verticalAlign: -3, marginRight: 6 }} />Developer Portal</h1>
-        <p className="page-desc">
-          The credential system an external EMR actually integrates against — separate from clinician
-          login. Generate a key, call the versioned <code>/api/v1</code> API with it, and see scopes and
-          rate limits enforced live.
-        </p>
+        <h1 className="page-title"><KeyRound size={20} style={{ verticalAlign: -3, marginRight: 6 }} />{t('page_developer_title')}</h1>
+        <p className="page-desc">{t('page_developer_desc')}</p>
       </div>
 
       <div style={{ marginBottom: 18 }}>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sparkles, Search, PlayCircle, ChevronRight } from 'lucide-react';
 import {
@@ -103,6 +104,7 @@ function SuggestionCard({ suggestion, poolLabel }: { suggestion: AiSuggestion; p
 }
 
 export default function AiMappingLab() {
+  const { t } = useLanguage();
   const [codeInput, setCodeInput] = useState('');
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [batchResults, setBatchResults] = useState<AiSuggestion[] | null>(null);
@@ -137,11 +139,8 @@ export default function AiMappingLab() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title"><Sparkles size={20} style={{ verticalAlign: -3, marginRight: 6 }} />AI Mapping Lab</h1>
-        <p className="page-desc">
-          Ambiguity-aware AI suggestions for the {unmappedPreview ? unmappedPreview.total_unmapped.toLocaleString() : '…'} NAMASTE-family
-          codes with no curated ICD-11 mapping — every suggestion is transparently classified, never silently guessed.
-        </p>
+        <h1 className="page-title"><Sparkles size={20} style={{ verticalAlign: -3, marginRight: 6 }} />{t('page_ai_lab_title')}</h1>
+        <p className="page-desc">{t('page_ai_lab_desc')}</p>
       </div>
 
       <div className="card mb-4">

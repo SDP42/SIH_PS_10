@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, XCircle, HelpCircle, ClipboardCheck } from 'lucide-react';
 import { getReviewQueue, decideReviewItem, type ReviewQueueItem } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const STATUS_TABS = [
   { key: 'pending', label: 'Pending' },
@@ -81,6 +82,7 @@ function DecideRow({ item, onDone }: { item: ReviewQueueItem; onDone: () => void
 type FlagFilter = 'all' | 'ai_suggestion' | 'legacy_reclassification';
 
 export default function ReviewQueue() {
+  const { t } = useLanguage();
   const [status, setStatus] = useState('pending');
   const [flagFilter, setFlagFilter] = useState<FlagFilter>('all');
   const [toast, setToast] = useState<string | null>(null);
@@ -101,22 +103,9 @@ export default function ReviewQueue() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title"><ClipboardCheck size={20} style={{ verticalAlign: -3, marginRight: 6 }} />Expert Review Queue</h1>
-        <p className="page-desc">
-          Human-in-the-loop governance: AI suggestions that need context or expert review land here.
-          Approving one writes a brand-new curated mapping — nothing is ever auto-approved.
-        </p>
+        <h1 className="page-title"><ClipboardCheck size={20} style={{ verticalAlign: -3, marginRight: 6 }} />{t('page_review_title')}</h1>
+        <p className="page-desc">{t('page_review_desc')}</p>
       </div>
-
-      {legacyCount > 0 && (
-        <div className="demo-banner" style={{ marginBottom: 12 }}>
-          ⚠ {legacyCount} of these items are <strong>legacy reclassifications</strong>: a one-time data audit found
-          historical curated mappings whose target_system was mislabeled TM2 when the code actually falls in a
-          Biomedicine chapter. The label was corrected automatically (that's a fact, not a judgment call) — these
-          items ask a human to confirm the underlying match itself is still correct, since it came from a fuzzy
-          matching pass that was never precision-validated.
-        </div>
-      )}
 
       {toast && (
         <div className="card mb-4" style={{ background: 'rgba(22,163,74,0.1)', borderColor: '#16a34a', fontSize: 13 }}>

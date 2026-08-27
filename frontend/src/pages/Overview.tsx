@@ -52,12 +52,6 @@ export default function Overview() {
         <p className="page-desc">{t('page_overview_desc')}</p>
       </div>
 
-      <div className="demo-banner">
-        ⚠ <strong>What's real vs. demo:</strong> terminology data, AI mapping scores, governance decisions, and the
-        audit timeline below are all real (SQLite-backed, live-computed). Login/auth is a labeled ABHA Demo Mode
-        (no real ABHA OAuth2) — see Settings for details.
-      </div>
-
       {/* Stats grid */}
       <div className="grid-4 mb-4">
         {statsLoading ? (

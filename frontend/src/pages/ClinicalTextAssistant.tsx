@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { MessageSquareText, AlertTriangle, Ban, Search, ShieldAlert } from 'lucide-react';
+import { MessageSquareText, AlertTriangle, Ban, Search } from 'lucide-react';
 import { getClinicalTextCandidates, type SymptomCandidate } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const EXAMPLES = [
   'Patient has cough.',
@@ -65,6 +66,7 @@ function SymptomCard({ s }: { s: SymptomCandidate }) {
 }
 
 export default function ClinicalTextAssistant() {
+  const { t } = useLanguage();
   const [text, setText] = useState('');
   const [submitted, setSubmitted] = useState('');
 
@@ -86,24 +88,9 @@ export default function ClinicalTextAssistant() {
       <div className="page-header">
         <h1 className="page-title">
           <MessageSquareText size={20} style={{ verticalAlign: -3, marginRight: 6 }} />
-          Clinical Text Assistant
+          {t('page_clinical_text_title')}
         </h1>
-        <p className="page-desc">
-          Describe what the patient reported in plain language. This extracts symptoms, duration, body
-          site and negation, then searches real NAMASTE and ICD-11 terminology for each one.
-          It never infers a diagnosis — every match is a candidate for a clinician to confirm.
-        </p>
-      </div>
-
-      <div className="demo-banner" style={{ marginBottom: 18, alignItems: 'flex-start' }}>
-        <ShieldAlert size={14} style={{ flexShrink: 0, marginTop: 3 }} />
-        <span>
-          <strong>Symptom terminology assistant, not a diagnostic tool.</strong> A symptom is never
-          automatically converted into a diagnosis here — "cough" stays "cough," it does not become
-          "pneumonia." Extraction is rule/lexicon-based (not a black-box model), so every result is
-          traceable to a specific pattern match. Negated symptoms ("no fever") are shown but never
-          searched for candidates.
-        </span>
+        <p className="page-desc">{t('page_clinical_text_desc')}</p>
       </div>
 
       <div className="card" style={{ marginBottom: 18 }}>

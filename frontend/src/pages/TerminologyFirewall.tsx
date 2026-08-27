@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ShieldAlert, ShieldCheck, ShieldQuestion, PlayCircle, History } from 'lucide-react';
 import { checkFirewall, getFirewallHistory, type FirewallResult } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const VERDICT_STYLE: Record<string, { badge: string; icon: JSX.Element; label: string }> = {
   ACCEPTED: { badge: 'badge-equivalent', icon: <ShieldCheck size={16} />, label: 'ACCEPTED' },
@@ -26,6 +27,7 @@ const SAMPLE_BUNDLE = `{
 }`;
 
 export default function TerminologyFirewall() {
+  const { t } = useLanguage();
   const [apiKey, setApiKey] = useState('');
   const [bundleText, setBundleText] = useState(SAMPLE_BUNDLE);
   const [result, setResult] = useState<FirewallResult | null>(null);
@@ -50,7 +52,7 @@ export default function TerminologyFirewall() {
       setResult(r);
       refetch();
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof Error ? e.message : 'The firewall check could not be completed.');
     } finally {
       setLoading(false);
     }
@@ -61,14 +63,9 @@ export default function TerminologyFirewall() {
       <div className="page-header">
         <h1 className="page-title">
           <ShieldAlert size={20} style={{ verticalAlign: -3, marginRight: 6 }} />
-          Terminology Firewall
+          {t('page_firewall_title')}
         </h1>
-        <p className="page-desc">
-          A clinical terminology quality gateway for external EMRs — composes this service's existing
-          code-existence check, WHO drift registry, and dual-coding translate logic into one
-          accept / reject / review verdict for an incoming FHIR Bundle. Never modifies the Bundle,
-          the mapping registry, or the review queue — it's advisory, not a mutation.
-        </p>
+        <p className="page-desc">{t('page_firewall_desc')}</p>
       </div>
 
       <div className="card" style={{ marginBottom: 18 }}>
@@ -109,10 +106,10 @@ export default function TerminologyFirewall() {
             <span className={`badge ${VERDICT_STYLE[result.verdict]?.badge}`} style={{ fontSize: 13, padding: '6px 14px' }}>
               {VERDICT_STYLE[result.verdict]?.label}
             </span>
-            <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{result.checked_conditions} Condition(s) checked</span>
+            <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{result.checked_conditions ?? 0} Condition(s) checked</span>
           </div>
 
-          {result.results.map((r, i) => (
+          {(result.results ?? []).map((r, i) => (
             <div key={i} className="card-sm" style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span className="td-code">{r.source_code || r.resource_id || `resource #${i + 1}`}</span>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { GitCompareArrows, AlertOctagon, ArrowRight, ClipboardList, History } from 'lucide-react';
 import {
@@ -18,6 +19,7 @@ function StatBox({ label, value, tone }: { label: string; value: number; tone?: 
 }
 
 export default function WhatIfSimulator() {
+  const { t } = useLanguage();
   const [fromRelease, setFromRelease] = useState('');
   const [toRelease, setToRelease] = useState('');
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -50,13 +52,9 @@ export default function WhatIfSimulator() {
       <div className="page-header">
         <h1 className="page-title">
           <GitCompareArrows size={20} style={{ verticalAlign: -3, marginRight: 6 }} />
-          Terminology What-If Simulator
+          {t('page_what_if_title')}
         </h1>
-        <p className="page-desc">
-          Diff any two real WHO ICD-11 releases and see exactly what it would mean for this service's own
-          curated mappings — before WHO's next release actually ships. Runs entirely against real WHO
-          release files; never modifies a mapping until you explicitly escalate a finding to expert review.
-        </p>
+        <p className="page-desc">{t('page_what_if_desc')}</p>
       </div>
 
       <div className="card" style={{ marginBottom: 18 }}>

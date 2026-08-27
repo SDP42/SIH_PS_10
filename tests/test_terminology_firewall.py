@@ -212,3 +212,23 @@ def test_worst_verdict_wins_across_multiple_conditions():
     body = resp.json()
     assert body["checked_conditions"] == 2
     assert body["verdict"] == "REJECTED"  # the worst of ACCEPTED + REJECTED
+
+
+def test_error_responses_carry_a_readable_diagnostic():
+    """
+    Regression guard for a page-crashing bug: an auth failure returns an
+    OperationOutcome body with no `results` array. The frontend used to map
+    over that array unconditionally, throwing and blanking the whole page.
+    The API contract relied on here is that a failure is a non-2xx status
+    carrying a readable diagnostics string, so the client can surface it as
+    a message instead of trying to render it as a result.
+    """
+    resp = client.post(
+        "/api/v1/firewall/check",
+        json=_bundle_with_condition(_valid_condition("AA-1")),
+        headers={"X-API-Key": "nsk_fhir_definitely_not_real"},
+    )
+    assert resp.status_code == 401
+    body = resp.json()
+    assert "results" not in body, "an error body must not masquerade as a successful result"
+    assert body["detail"]["issue"][0]["diagnostics"]

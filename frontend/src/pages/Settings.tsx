@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { getStats, getTerminologies } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 import { User, Database, Key, Globe, ShieldCheck } from 'lucide-react';
 import { useDemoAuth } from '../auth/DemoAuthContext';
 
 export default function Settings() {
+  const { t } = useLanguage();
   const { data: stats } = useQuery({ queryKey: ['stats'], queryFn: getStats });
   const { data: terms } = useQuery({ queryKey: ['terminologies'], queryFn: getTerminologies });
   const { session, logout } = useDemoAuth();
@@ -14,8 +16,8 @@ export default function Settings() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Settings</h1>
-        <p className="page-desc">Platform configuration and system information.</p>
+        <h1 className="page-title">{t('page_settings_title')}</h1>
+        <p className="page-desc">{t('page_settings_desc')}</p>
       </div>
 
       <div style={{ display: 'grid', gap: 16, maxWidth: 720 }}>

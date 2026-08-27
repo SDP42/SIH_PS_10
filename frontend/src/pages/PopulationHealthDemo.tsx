@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Users, FlaskConical, MapPin, Calendar, PieChart, ListOrdered } from 'lucide-react';
 import { getPopulationDemo } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 
 function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
   return (
@@ -31,6 +32,7 @@ const GENDER_COLORS: Record<string, string> = { Male: '#38bdf8', Female: '#f472b
 const TRADITION_COLORS: Record<string, string> = { Ayurveda: '#2dd4bf', Siddha: '#fbbf24', Unani: '#fb7185' };
 
 export default function PopulationHealthDemo() {
+  const { t } = useLanguage();
   const { data, isLoading, isError } = useQuery({ queryKey: ['population-demo'], queryFn: getPopulationDemo });
 
   return (
@@ -38,35 +40,9 @@ export default function PopulationHealthDemo() {
       <div className="page-header">
         <h1 className="page-title">
           <FlaskConical size={20} style={{ verticalAlign: -3, marginRight: 6 }} />
-          Population Health Demo
+          {t('page_population_title')}
         </h1>
-        <p className="page-desc">
-          An illustration of what a national AYUSH population-health view could look like at realistic
-          volume — gender, region, and time breakdowns for a government/Ministry stakeholder to picture.
-        </p>
-      </div>
-
-      <div
-        style={{
-          background: 'repeating-linear-gradient(135deg, rgba(251,191,36,0.12), rgba(251,191,36,0.12) 12px, rgba(251,191,36,0.06) 12px, rgba(251,191,36,0.06) 24px)',
-          border: '2px solid var(--warning)',
-          borderRadius: 12,
-          padding: '16px 18px',
-          marginBottom: 20,
-          display: 'flex',
-          gap: 12,
-          alignItems: 'flex-start',
-        }}
-      >
-        <FlaskConical size={20} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 2 }} />
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 14.5, color: 'var(--warning)', letterSpacing: 0.3 }}>
-            100% SYNTHETIC DEMONSTRATION DATA — NO REAL PATIENTS
-          </div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4 }}>
-            {data?.disclaimer || 'Every patient, encounter, and demographic figure on this page is fabricated by scripts/generate_synthetic_population.py. It illustrates dashboard shape at realistic volume, not real usage — see the Analytics page for this service’s real, live-computed metrics.'}
-          </div>
-        </div>
+        <p className="page-desc">{t('page_population_desc')}</p>
       </div>
 
       {isLoading && (

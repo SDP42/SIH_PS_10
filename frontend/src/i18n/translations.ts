@@ -89,6 +89,95 @@ export const translations: Record<string, Dict> = {
   // WHO Sync
   page_who_sync_title: { en: 'WHO ICD-11 Synchronisation', hi: 'WHO ICD-11 सिंक्रोनाइज़ेशन', mr: 'WHO ICD-11 सिंक्रोनायझेशन', gu: 'WHO ICD-11 સિંક્રોનાઇઝેશન' },
 
+
+  // ── Page titles and descriptions (every page) ──────────────────────────
+  // Technical body copy (FHIR/ICD jargon, API detail) is deliberately left
+  // in English: those terms are used in English by Indian clinical software
+  // and standards documents, and machine-translating them would reduce
+  // clarity rather than improve it.
+  page_ai_lab_title: { en: 'AI Mapping Lab', hi: 'एआई मैपिंग लैब', mr: 'एआय मॅपिंग लॅब', gu: 'AI મેપિંગ લેબ' },
+  page_ai_lab_desc: {
+    en: 'Ambiguity-aware AI suggestions for unmapped NAMASTE codes, with an explicit refusal when confidence is too low.',
+    hi: 'अमैप्ड NAMASTE कोड के लिए संदिग्धता-सचेत एआई सुझाव, कम विश्वास होने पर स्पष्ट अस्वीकृति के साथ।',
+    mr: 'मॅप न झालेल्या NAMASTE कोडसाठी संदिग्धता-जाणकार एआय सूचना, विश्वास कमी असल्यास स्पष्ट नकारासह.',
+    gu: 'અનમેપ્ડ NAMASTE કોડ માટે અસ્પષ્ટતા-જાગૃત AI સૂચનો, વિશ્વાસ ઓછો હોય ત્યારે સ્પષ્ટ ઇનકાર સાથે.',
+  },
+  page_mapping_title: { en: 'Mapping Intelligence', hi: 'मैपिंग इंटेलिजेंस', mr: 'मॅपिंग इंटेलिजन्स', gu: 'મેપિંગ ઇન્ટેલિજન્સ' },
+  page_mapping_desc: {
+    en: 'Browse and filter every curated NAMASTE to ICD-11 mapping, with backend-computed confidence.',
+    hi: 'बैकएंड-गणित विश्वास के साथ हर क्यूरेटेड NAMASTE से ICD-11 मैपिंग देखें और फ़िल्टर करें।',
+    mr: 'बॅकएंड-गणित विश्वासासह प्रत्येक क्युरेटेड NAMASTE ते ICD-11 मॅपिंग पहा आणि फिल्टर करा.',
+    gu: 'બેકએન્ડ-ગણતરી કરેલ વિશ્વાસ સાથે દરેક ક્યુરેટેડ NAMASTE થી ICD-11 મેપિંગ બ્રાઉઝ કરો અને ફિલ્ટર કરો.',
+  },
+  page_review_title: { en: 'Expert Review Queue', hi: 'विशेषज्ञ समीक्षा कतार', mr: 'तज्ज्ञ पुनरावलोकन रांग', gu: 'નિષ્ણાત સમીક્ષા કતાર' },
+  page_review_desc: {
+    en: 'Human-in-the-loop governance: AI suggestions that need context or expert review land here. Approving one writes a brand-new curated mapping — nothing is ever auto-approved.',
+    hi: 'मानव-सहित शासन: जिन एआई सुझावों को संदर्भ या विशेषज्ञ समीक्षा चाहिए वे यहाँ आते हैं। स्वीकृति एक नई क्यूरेटेड मैपिंग बनाती है — कुछ भी स्वतः स्वीकृत नहीं होता।',
+    mr: 'मानव-सहभागी शासन: ज्या एआय सूचनांना संदर्भ किंवा तज्ज्ञ पुनरावलोकन आवश्यक आहे त्या इथे येतात. मंजुरी नवीन क्युरेटेड मॅपिंग तयार करते — काहीही आपोआप मंजूर होत नाही.',
+    gu: 'માનવ-સહભાગી શાસન: જે AI સૂચનોને સંદર્ભ અથવા નિષ્ણાત સમીક્ષાની જરૂર છે તે અહીં આવે છે. મંજૂરી નવું ક્યુરેટેડ મેપિંગ બનાવે છે — કંઈપણ આપોઆપ મંજૂર થતું નથી.',
+  },
+  page_fhir_title: { en: 'FHIR Workspace', hi: 'FHIR कार्यक्षेत्र', mr: 'FHIR कार्यक्षेत्र', gu: 'FHIR વર્કસ્પેસ' },
+  page_fhir_desc: {
+    en: 'Live FHIR R4 operations — $translate, Bundle upload, and ProblemList construction against the real backend.',
+    hi: 'लाइव FHIR R4 संचालन — असली बैकएंड पर $translate, Bundle अपलोड और ProblemList निर्माण।',
+    mr: 'थेट FHIR R4 क्रिया — खऱ्या बॅकएंडवर $translate, Bundle अपलोड आणि ProblemList निर्मिती.',
+    gu: 'લાઇવ FHIR R4 કામગીરી — વાસ્તવિક બેકએન્ડ પર $translate, Bundle અપલોડ અને ProblemList નિર્માણ.',
+  },
+  page_clinical_text_title: { en: 'Clinical Text Assistant', hi: 'क्लिनिकल टेक्स्ट सहायक', mr: 'क्लिनिकल टेक्स्ट सहाय्यक', gu: 'ક્લિનિકલ ટેક્સ્ટ સહાયક' },
+  page_clinical_text_desc: {
+    en: 'Describe what the patient reported in plain language. This extracts symptoms, duration, body site and negation, then searches real NAMASTE and ICD-11 terminology. It never infers a diagnosis.',
+    hi: 'रोगी ने जो बताया उसे सामान्य भाषा में लिखें। यह लक्षण, अवधि, शरीर-स्थान और निषेध निकालता है, फिर वास्तविक NAMASTE और ICD-11 शब्दावली खोजता है। यह कभी निदान नहीं लगाता।',
+    mr: 'रुग्णाने काय सांगितले ते साध्या भाषेत लिहा. हे लक्षणे, कालावधी, शरीर-स्थान आणि नकार ओळखते, नंतर खरी NAMASTE आणि ICD-11 संज्ञावली शोधते. हे कधीही निदान करत नाही.',
+    gu: 'દર્દીએ જે જણાવ્યું તે સામાન્ય ભાષામાં લખો. આ લક્ષણો, સમયગાળો, શરીર-સ્થાન અને નકાર ઓળખે છે, પછી વાસ્તવિક NAMASTE અને ICD-11 પરિભાષા શોધે છે. તે ક્યારેય નિદાન કરતું નથી.',
+  },
+  page_what_if_title: { en: 'Terminology What-If Simulator', hi: 'शब्दावली व्हाट-इफ सिम्युलेटर', mr: 'संज्ञावली व्हॉट-इफ सिम्युलेटर', gu: 'પરિભાષા વોટ-ઇફ સિમ્યુલેટર' },
+  page_what_if_desc: {
+    en: 'Compare any two real WHO ICD-11 releases and see exactly which curated mappings would break — before the release ships.',
+    hi: 'किन्हीं दो वास्तविक WHO ICD-11 रिलीज़ की तुलना करें और देखें कौन-सी क्यूरेटेड मैपिंग टूटेंगी — रिलीज़ आने से पहले।',
+    mr: 'कोणत्याही दोन खऱ्या WHO ICD-11 रिलीजची तुलना करा आणि कोणती क्युरेटेड मॅपिंग तुटतील ते पहा — रिलीज येण्यापूर्वी.',
+    gu: 'કોઈપણ બે વાસ્તવિક WHO ICD-11 રિલીઝની તુલના કરો અને કઈ ક્યુરેટેડ મેપિંગ તૂટશે તે જુઓ — રિલીઝ આવે તે પહેલાં.',
+  },
+  page_firewall_title: { en: 'Terminology Firewall', hi: 'टर्मिनोलॉजी फ़ायरवॉल', mr: 'टर्मिनॉलॉजी फायरवॉल', gu: 'ટર્મિનોલોજી ફાયરવોલ' },
+  page_firewall_desc: {
+    en: 'A clinical terminology quality gateway for external EMRs — returns one accept, reject or review verdict for an incoming FHIR Bundle. It is advisory and never modifies your record.',
+    hi: 'बाहरी EMR के लिए क्लिनिकल शब्दावली गुणवत्ता गेटवे — आने वाले FHIR Bundle के लिए एक स्वीकार, अस्वीकार या समीक्षा निर्णय देता है। यह सलाहकारी है और आपका रिकॉर्ड कभी नहीं बदलता।',
+    mr: 'बाह्य EMR साठी क्लिनिकल संज्ञावली गुणवत्ता गेटवे — येणाऱ्या FHIR Bundle साठी एक स्वीकार, नकार किंवा पुनरावलोकन निर्णय देते. हे सल्लागार आहे आणि तुमची नोंद कधीही बदलत नाही.',
+    gu: 'બાહ્ય EMR માટે ક્લિનિકલ પરિભાષા ગુણવત્તા ગેટવે — આવનારા FHIR Bundle માટે એક સ્વીકાર, નકાર અથવા સમીક્ષા ચુકાદો આપે છે. તે સલાહકારી છે અને તમારો રેકોર્ડ ક્યારેય બદલતું નથી.',
+  },
+  page_population_title: { en: 'Population Health Demo', hi: 'जनसंख्या स्वास्थ्य डेमो', mr: 'लोकसंख्या आरोग्य डेमो', gu: 'વસ્તી આરોગ્ય ડેમો' },
+  page_population_desc: {
+    en: 'An illustration of what a national AYUSH population-health view could look like at realistic volume — gender, region and time breakdowns for a Ministry stakeholder to picture.',
+    hi: 'यह दर्शाता है कि वास्तविक पैमाने पर राष्ट्रीय AYUSH जनसंख्या-स्वास्थ्य दृश्य कैसा दिख सकता है — लिंग, क्षेत्र और समय के विभाजन के साथ।',
+    mr: 'वास्तविक प्रमाणात राष्ट्रीय AYUSH लोकसंख्या-आरोग्य दृश्य कसे दिसू शकते याचे उदाहरण — लिंग, प्रदेश आणि वेळेच्या विभाजनांसह.',
+    gu: 'વાસ્તવિક સ્તરે રાષ્ટ્રીય AYUSH વસ્તી-આરોગ્ય દૃશ્ય કેવું દેખાઈ શકે તેનું ઉદાહરણ — લિંગ, પ્રદેશ અને સમયના વિભાજન સાથે.',
+  },
+  page_developer_title: { en: 'Developer Portal', hi: 'डेवलपर पोर्टल', mr: 'डेव्हलपर पोर्टल', gu: 'ડેવલપર પોર્ટલ' },
+  page_developer_desc: {
+    en: 'The credential system an external EMR integrates against — separate from clinician login. Generate a key, call the versioned API, and see scopes and rate limits enforced live.',
+    hi: 'वह क्रेडेंशियल प्रणाली जिससे बाहरी EMR जुड़ता है — चिकित्सक लॉगिन से अलग। कुंजी बनाएं, संस्करण API कॉल करें, और स्कोप व दर-सीमा लागू होते देखें।',
+    mr: 'बाह्य EMR ज्याच्याशी जोडले जाते ती क्रेडेन्शियल प्रणाली — डॉक्टर लॉगिनपासून वेगळी. की तयार करा, आवृत्ती API कॉल करा आणि स्कोप व दर-मर्यादा लागू होताना पहा.',
+    gu: 'બાહ્ય EMR જેની સાથે જોડાય છે તે ક્રેડેન્શિયલ સિસ્ટમ — ક્લિનિશિયન લોગિનથી અલગ. કી બનાવો, વર્ઝન કરેલ API કૉલ કરો, અને સ્કોપ અને દર-મર્યાદા લાગુ થતી જુઓ.',
+  },
+  page_settings_title: { en: 'Settings', hi: 'सेटिंग्स', mr: 'सेटिंग्ज', gu: 'સેટિંગ્સ' },
+  page_settings_desc: {
+    en: 'Session identity, configured backend, and connected terminology systems.',
+    hi: 'सत्र पहचान, कॉन्फ़िगर किया गया बैकएंड, और जुड़े हुए शब्दावली सिस्टम।',
+    mr: 'सत्र ओळख, कॉन्फिगर केलेले बॅकएंड आणि जोडलेल्या संज्ञावली प्रणाली.',
+    gu: 'સત્ર ઓળખ, ગોઠવેલ બેકએન્ડ, અને જોડાયેલ પરિભાષા સિસ્ટમો.',
+  },
+  page_who_sync_desc: {
+    en: 'The live half of this service: it authenticates against WHO\u2019s ICD-API, resolves codes through it, and reports drift. Nothing is rewritten automatically.',
+    hi: 'इस सेवा का लाइव भाग: यह WHO के ICD-API से प्रमाणित होता है, कोड हल करता है, और परिवर्तन बताता है। कुछ भी स्वतः नहीं बदला जाता।',
+    mr: 'या सेवेचा थेट भाग: तो WHO च्या ICD-API शी प्रमाणित होतो, कोड सोडवतो आणि बदल नोंदवतो. काहीही आपोआप बदलले जात नाही.',
+    gu: 'આ સેવાનો લાઇવ ભાગ: તે WHO ના ICD-API સાથે પ્રમાણિત થાય છે, કોડ ઉકેલે છે, અને ફેરફાર જણાવે છે. કંઈપણ આપોઆપ ફરીથી લખાતું નથી.',
+  },
+  page_analytics_desc: {
+    en: 'A live, oversight-level view of the terminology bridge: corpus size and mapping coverage per AYUSH tradition, the human review backlog, WHO synchronisation posture, and real system activity.',
+    hi: 'शब्दावली सेतु का लाइव, निगरानी-स्तरीय दृश्य: प्रत्येक AYUSH परंपरा का संग्रह आकार और मैपिंग कवरेज, मानव समीक्षा बैकलॉग, WHO सिंक स्थिति, और वास्तविक सिस्टम गतिविधि।',
+    mr: 'संज्ञावली सेतूचे थेट, देखरेख-स्तरीय दृश्य: प्रत्येक AYUSH परंपरेचा संग्रह आकार आणि मॅपिंग व्याप्ती, मानवी पुनरावलोकन अनुशेष, WHO सिंक स्थिती आणि खरी प्रणाली क्रिया.',
+    gu: 'પરિભાષા સેતુનું લાઇવ, દેખરેખ-સ્તરીય દૃશ્ય: દરેક AYUSH પરંપરાનું સંગ્રહ કદ અને મેપિંગ કવરેજ, માનવ સમીક્ષા બેકલોગ, WHO સિંક સ્થિતિ, અને વાસ્તવિક સિસ્ટમ પ્રવૃત્તિ.',
+  },
+
   // Language switcher itself
   language_switcher_label: { en: 'Language', hi: 'भाषा', mr: 'भाषा', gu: 'ભાષા' },
 };

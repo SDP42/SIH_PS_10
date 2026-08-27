@@ -53,10 +53,6 @@ export default function TerminologyExplorer() {
         <p className="page-desc">{t('page_terminology_desc')}</p>
       </div>
 
-      <div className="demo-banner">
-        ⚠ <strong>Simulated Demo Environment:</strong> Terminology data is real and database-backed. Code-translation and comparison features are in beta.
-      </div>
-
       {/* Tabs */}
       <div className="tabs">
         <button className={`tab${activeTab === 'registry' ? ' active' : ''}`} onClick={() => setActiveTab('registry')}>

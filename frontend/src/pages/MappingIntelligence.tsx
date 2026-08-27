@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getMappings, getMappingById, type Mapping, type MappingDetail } from '../api';
+import { useLanguage } from '../i18n/LanguageContext';
 import { GitMerge, Search, X, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 
 function ConfBar({ value }: { value: number | null }) {
@@ -122,6 +123,7 @@ function MappingDetailPanel({ id, onClose }: { id: number; onClose: () => void }
 }
 
 export default function MappingIntelligence() {
+  const { t } = useLanguage();
   const [q, setQ] = useState('');
   const [inputVal, setInputVal] = useState('');
   const [equivalence, setEquivalence] = useState('');
@@ -143,8 +145,8 @@ export default function MappingIntelligence() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Mapping Intelligence</h1>
-        <p className="page-desc">Discover, validate and manage cross-system terminology mappings between NAMASTE and ICD-11 TM2.</p>
+        <h1 className="page-title">{t('page_mapping_title')}</h1>
+        <p className="page-desc">{t('page_mapping_desc')}</p>
       </div>
 
       {/* Mapping flow header */}
